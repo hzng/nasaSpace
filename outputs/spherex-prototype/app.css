@@ -1751,6 +1751,16 @@ details code {
 #track-plot,#track-change-plot {display:block;width:100%;max-height:185px;background:var(--canvas-bg);border:1px solid var(--line);border-radius:10px}
 #track-plot circle[role=button],#track-change-plot rect[role=button],#track-change-plot circle[role=button] {cursor:pointer}
 #track-result details {font-size:11px;margin-top:2px;color:var(--muted)}
+.track-object {display:grid;gap:4px;font-size:12px;color:var(--muted);margin:0 0 10px;max-width:360px}
+.track-kpi small {font-size:11px;color:#c9a0ff;font-family:var(--mono)}
+.track-eph {border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--canvas-bg)}
+.tracking-bar .track-eph p {margin:0 0 4px;color:var(--text)}
+.tracking-bar .track-eph .track-source {font-weight:700;color:#c9a0ff}
+.track-warnings {margin:0 0 4px;padding-left:18px;font-size:12px;color:var(--accent)}
+.track-warnings:empty {display:none}
+.tracking-bar .track-flag {padding:6px 10px;border-radius:8px;border:1px solid var(--positive);font-weight:700;color:var(--positive)}
+.tracking-bar .track-flag.bad {border-color:var(--danger);background:rgba(240,128,110,.12);color:var(--danger)}
+.tracking-bar p.track-error {color:var(--danger);font-weight:600;white-space:pre-line}
 @media (max-width: 720px) {.track-kpis{grid-template-columns:1fr 1fr}.track-charts{grid-template-columns:1fr}}
 .star-space {width:min(1280px,96vw);max-width:96vw;padding:0;border:1px solid var(--line-strong);background:#10131a;color:var(--text);border-radius:16px;max-height:96vh;overflow:auto}
 .star-space .dialog-title {padding:20px 26px;margin:0}
