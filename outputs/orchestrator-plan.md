@@ -142,3 +142,20 @@ Changed:
 Evidence: computed sizes and weights read from the live page match the scale; no console errors on Sky, tracked state, 3D Map and Archive dialog; no horizontal scroll at 390 px; screenshots read at 1440 and 390 px. Public link serves `app.css?v=7`.
 
 Not verified: hover and press motion in motion (headless screenshots are static; computed transition values were read). Spectrum results state after a measurement. Firefox and Safari.
+
+## Image-first redesign of the Sky screen (2026-11-13, user-approved direction)
+
+The detail pass was judged invisible by the user, who then chose the image-first direction from three options.
+Owner: opus subagent (interrupted by the usage limit, resumed), audited by the orchestrator. Files: `index.html`, `app.css`, `app.js`. Built in preview files and swapped in after checks.
+
+- One slim toolbar replaces the two-row settings card; the six targets live in a switcher popover.
+- The sky image is the hero (670 px tall at 1440x900, was about 495 px); view controls float top-right, playback floats bottom-center with a "Frame N / total" counter.
+- One side panel (420 px, stays in view) holds the Vesta note, Observation and Pixel tabs, and the motion tracker.
+- Spectrum sits full width under the frame strip: at 420 px its axis text was unreadable (subagent's measured call under the brief's rule).
+- Below 1121 px: single column, controls above the image, playback below it.
+
+Evidence (orchestrator, live page): target switcher opens with 6 targets, picking Barnard loads 55 frames and closes the popover; frame counter moves on next and during play; pixel click opens the Pixel tab; Compare shows two 478 px panes and returns to Single; 3D Map hides the Sky layout, and "Inspect sky" on a galaxy returns to Sky with its coordinates and the empty-state message; no console errors; no horizontal scroll at 1440. Screenshots read: desktop default, tracked with path card, spectrum result (114 points), empty state, phone. Subagent reports all 14 brief checks passed, including 768 and 390 px.
+
+Known imperfections: toolbar wraps to a second row at 1280 px and with long target names; stepper buttons are 38 px tall at 390 px; tracker "Clear" wraps on phones.
+
+Git: uncommitted on `fable`. The two preview files that were swept into the earlier commit are now deleted in the working tree. Local `fable` and `origin/fable` have diverged by one commit each with identical content.

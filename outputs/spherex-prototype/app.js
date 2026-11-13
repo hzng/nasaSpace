@@ -201,6 +201,7 @@ function setFrame(index) {
   const frame = state.session.frames[index];
   $("timeline").value = index;
   $("timeline").setAttribute("aria-valuetext", dateText(frame.timestamp));
+  if ($("frame-counter")) $("frame-counter").textContent = `Frame ${index+1} / ${state.session.frames.length}`;
   $("observation-date").textContent = new Date(frame.timestamp).toLocaleDateString("en",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
   $("observation-time").textContent = `${frame.timestamp.slice(11,19)} UTC`;
   entryList($("metadata"), [
@@ -247,6 +248,23 @@ function setFrame(index) {
   if (state.point) inspect(state.point, index);
 }
 
+// Toolbar target switcher (absent on older pages: every lookup is guarded).
+function syncSwitcher() {
+  if (!$("switcher-name")) return;
+  const field = state.library?.fields?.find(item => item.key === state.field);
+  const count = field ? field.frames : state.session?.frames?.length;
+  $("switcher-name").textContent = field ? field.name : state.title;
+  $("switcher-count").textContent = count == null ? "" : `${count} obs`;
+  $("switcher-thumb").hidden = !field?.thumbnail;
+  if (field?.thumbnail) $("switcher-thumb").src = field.thumbnail;
+  $("switcher-icon").toggleAttribute("hidden", Boolean(field?.thumbnail));  // SVG has no .hidden property
+}
+
+function closeTargets() {
+  const popover = $("target-popover");
+  if (popover?.matches?.(":popover-open")) popover.hidePopover();
+}
+
 function resetView() {
   state.zoom = 1; state.panX = 0; state.panY = 0;
   $("zoom").value = 1;
@@ -273,6 +291,7 @@ function sessionReady(session, request) {
   $("pixel-result").replaceChildren();
   $("field-title").textContent = state.title;
   $("field-type").textContent = `${session.options.ra.toFixed(4)}°, ${session.options.dec.toFixed(4)}°`;
+  syncSwitcher();
   $("timeline").max = Math.max(0, session.frames.length-1);
   $("filmstrip").replaceChildren();
   $("reference-date").replaceChildren();
@@ -336,6 +355,7 @@ function sessionReady(session, request) {
     for (const id of ["sky","reference"]) { const canvas=$(id); canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height); }
     $("metadata").replaceChildren(); $("quality-card").replaceChildren();
     $("observation-date").textContent = "No frames"; $("observation-time").textContent = "";
+    if ($("frame-counter")) $("frame-counter").textContent = "Frame 0 / 0";
     $("baseline").textContent = "0 frames"; $("comparison-note").textContent = session.empty_reason || "No matches";
     $("frame-caption").textContent = ""; $("reference-caption").textContent = ""; $("scale-label").textContent = "";
     updateLegend();
@@ -454,6 +474,8 @@ function chooseField(field) {
   // Preserve the chosen width and detector while switching targets.
   $("start").value = ""; $("end").value = "";
   for (const button of $("fields").children) button.setAttribute("aria-current",String(button.dataset.key === field.key));
+  closeTargets();
+  syncSwitcher();
   search();
 }
 
@@ -693,6 +715,7 @@ async function library() {
     meta.append(title,description); copy.append(categoryBadge(field.category),meta); button.append(img,copy); button.onclick = () => chooseField(field);
     $("fields").append(button);
   }
+  syncSwitcher();
   const sync = data.sync;
   $("sync-status").textContent = sync ? `${sync.status} · ${sync.completed}/${sync.total} synced` : "Local cache";
   $("imported-list").replaceChildren();
@@ -785,7 +808,13 @@ for (const id of ["markers","quality","tint"]) $(id).onchange = () => {
 $("zoom").oninput = () => { state.zoom = Number($("zoom").value); $("zoom-value").textContent = state.zoom.toFixed(1)+"×"; draw(); };
 $("reset-view").onclick = resetView;
 for (const tab of ["observation","pixel"]) $("tab-"+tab).onclick = () => selectTab(tab);
-for (const id of ["updates-button","import-shortcut"]) $(id).onclick = async () => { $("updates").showModal(); try { await library(); } catch(error) { status(error.message,"error"); } };
+// The popover lives in the top layer; pin it under its button each time it opens.
+$("target-popover")?.addEventListener("beforetoggle", event => {
+  if (event.newState !== "open") return;
+  const rect = $("target-switcher").getBoundingClientRect();
+  Object.assign(event.target.style, {top: `${rect.bottom + 6}px`, left: `${rect.left}px`});
+});
+for (const id of ["updates-button","import-shortcut"]) $(id).onclick = async () => { closeTargets(); $("updates").showModal(); try { await library(); } catch(error) { status(error.message,"error"); } };
 for (const button of document.querySelectorAll(".close-dialog")) button.onclick = () => button.closest("dialog").close();
 $("context-button").onclick = contextView;
 $("share").onclick = async () => {
