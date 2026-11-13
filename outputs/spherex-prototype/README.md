@@ -1,0 +1,105 @@
+# SPHEREx Observation Lab
+
+A local, public-facing astronomy workspace for inspecting real archived NASA SPHEREx observations, measuring point-source light across wavelength and time, screening candidate absorption features with explicit quality and uncertainty, and exploring physically grounded 3D galaxy and nearby-star catalogs.
+
+## Open the app
+
+Double-click `Launch SPHEREx.cmd` in this folder (or run `start.ps1`). Wait for the ready message, then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Keep the server window open while using the app and press `Ctrl+C` to stop it.
+
+You can also start the server directly from the `outputs/spherex-prototype` folder:
+
+```powershell
+python -X utf8 server.py
+```
+
+The default port is `8765`. If that port is already occupied, run `python -X utf8 server.py --port 8766` and open `http://127.0.0.1:8766/`.
+
+The workspace uses Python packages already installed in `../../work/deps/`. On a fresh machine, install dependencies from `requirements.txt` (including `photutils>=3`). Keep the sibling `../spherex-viewer/data/` directory alongside `spherex-prototype/` under `outputs/`, as it supplies the initial featured field definitions and demonstration FITS cutouts.
+
+## Workspace guide
+
+### 1. Sky observations, flags & motion tracking
+
+1. Choose one of the six saved fields (**Vesta**, **Barnard’s Star**, **Epsilon Indi B**, **WISE 0855**, **RW Aurigae**, **R Draconis**) or enter custom **RA** / **Dec** (decimal degrees or `hh:mm:ss` / `±dd:mm:ss`).
+2. Use the **Width** (`5`, `10`, `15`, `30`, `60` arcminutes) and **Band** (`D1`–`D6`, `0.75–5.00 µm`) selectors or `‹`/`›` steppers. Changes apply automatically, coalesce rapid clicks to the latest request, and reuse cached aligned views.
+3. **Play as a video**: Click **Play** (or press `Space`) to blink across exposures over time. Adjust speed (`0.7`, `1.2`, `3.0 fps`) or step manually (`‹` / `›`). Switch to **Compare** to inspect two dates side-by-side.
+4. **Flags & detector artifact mask**:
+   - Check **Flags** (or click the `% flagged` card) to display the red mask over dead, persistent, transient, or saturated pixels.
+   - Hover over any red masked spot on the sky image to see the exact SPHEREx flag name (`Transient event`, `Dead pixel`, `Outlier`, etc.) in a floating badge.
+   - Click any pixel to open the **Pixel** tab for brightness (`MJy/sr`), uncertainty, wavelength, native pixel coordinates, and flag details (including `Near (±1 px)` hints when close to a defect).
+5. **Motion Tracker (stars, asteroids, and change of movement)**:
+   - **Track point**: Click any star or asteroid in the image, then press **Track point**. The tracker measures 2D Gaussian centroids across all frames, falling back to clean PSF wing fitting when bright cores are flagged or saturated.
+   - **Vesta & Solar System bodies**: For Vesta, click **Load archived Vesta example · Aug 4–5**, click the bright object inside the gold guide, and press **Track point**. The tracker matches archive ephemerides to measure its fast path (`~48.9 ″/hr`), drawing an active breadcrumb trail and forward velocity arrow.
+   - **Pick 2nd anchor**: For custom or uncataloged moving objects, click the object on Frame 1, press **Pick 2nd**, scrub to a later frame, click the object again, and press **Track point** to extrapolate velocity across all frames.
+   - **Change of movement**: The tracker computes step-by-step velocity, heading (`PA°`), cumulative displacement, and quadratic acceleration/turning (`Steady motion`, `Speeding up`, `Slowing down`, or `Curving path`), displayed in big bold KPI cards and two interactive plots (`#track-plot` sky path and `#track-change-plot` speed/displacement over time).
+   - **3D motion**: For stars with Gaia DR3 distance and radial velocity (such as Barnard’s Star), click **3D motion** to launch an interactive 3D trajectory view from year 1516 to 2516 relative to the Solar System.
+   - Click **Export JSON** to export measured positions, fit modes, velocities, and kinematics.
+6. **Coverage policy**: Aligned playback requires at least **99%** geometric detector footprint coverage inside the requested square and at least **80%** finite valid pixels. Partial exposures are excluded from playback and listed below the timeline with their original FITS links and reasons.
+
+### 2. Measure the light (spectra, light curves & candidate screening)
+
+1. Click a star in the aligned image (or keep the field center) and press **Measure light →**.
+2. Choose the observation time scope (**Within 7 days of this frame**, **Selected date range**, or **All cached dates**) and an optional **Reference redshift** (`0` for foreground/Milky Way targets).
+3. Measurements extract single-source forced ePSF photometry directly from the calibrated FITS `IMAGE`, `VARIANCE`, and `FLAGS` arrays using the official `spectral_wcs` (`CWAVE`/`CBAND`), `solid_angle_pixel_map`, and `epsf` calibration products.
+4. Toggle between **Brightness / wavelength** (`µJy` vs. `µm`) and **Brightness / time** (light curve inside a narrow `µm` interval), filter by release (**QR3** / **QR2** kept separate), and toggle review-flagged points (plotted as crosses; accepted points as circles). Negative fluxes are retained rather than clipped to zero.
+5. Click any plotted point to open its underlying observation frame in the sky viewer (switching detectors automatically when needed while keeping your graph visible).
+6. Download measurements as **CSV**, full analysis + calibration provenance as **JSON**, or the plot as **SVG**.
+
+### 3. Physical 3D map (`catalogs/galaxies.json` & `catalogs/stars.json`)
+
+1. Switch to **Physical 3D map** in the top workspace bar.
+2. Explore two real, quality-filtered catalog samples anchored at the Solar System barycenter in ICRS 3D coordinates:
+   - **Galaxies · DESI DR1** (`10,000` records, units in **Mpc**): Planck18 comoving distances from spectroscopic redshifts (`0.01 < z < 1.0`, `zwarn = 0`, `deltachi2 > 40`), with lookback times and formal redshift-only distance error bars.
+   - **Nearby stars · Gaia DR3** (`5,000` records within ~200 pc, units in **pc**): high-significance parallaxes (`parallax > 5 mas`, `parallax_over_error > 20`, `ruwe < 1.4`), inverse-parallax distances (`1000 / parallax`), and Gaia `BP−RP` display coloring.
+3. Orbit (`Drag`), pan (`Shift-drag`), zoom (`Wheel`), move (`W/A/S/D`, `Q/E`), click any point to inspect its metadata and toggle its radial distance uncertainty interval, scrub **Projected year** (`1516`–`2516`) for stars, focus or reset the camera, and export selected object JSON.
+4. **3D motion rule**: Stars are projected in 3D space using straight-line velocity **only where Gaia DR3 radial velocity is measured** (`1,559` of `5,000` stars). Stars without radial velocity stay fixed at their J2016.0 catalog 3D position with their sky-only proper motion noted explicitly.
+5. Click **Inspect SPHEREx here →** to jump back to the sky viewer at the object’s coordinates (propagated to epoch `2026.8` for Gaia stars, and carrying measured redshift `z` for DESI galaxies so rest-frame feature markers shift appropriately). If no local cached exposures overlap that position, press **Search IRSA ↗** to query the public archive.
+
+## Release status & archive refresh
+
+- **Currently public SPHEREx spectral-image releases** (verified November 11, 2026 against IRSA and `nasa-irsa-spherex` S3): **QR3** (DOI `10.26131/IRSA662`, first released September 2026) and **QR2** (DOI `10.26131/IRSA652`, headers updated April 10, 2026). **QR1** was retired in February 2026.
+- **Planned DR1 status**: Checked on November 11, 2026 — `https://irsa.ipac.caltech.edu/data/SPHEREx/docs/overview_dr1.html` returned HTTP 404 and the AWS S3 `dr1/` prefix did not exist (`qr2/` and `qr3/` only). Do not assume DR1 files are live from schedule dates alone; verify at IRSA before adding a DR1 collection to `archive-config.json`.
+
+### Refreshing cached observations, calibrations, and catalogs
+
+All large FITS cutouts, rendered sessions, calibrations, and extracted spectra are stored outside the deliverable directory in `../../work/prototype-cache/` (requiring multiple gigabytes of disk space; downloads automatically pause if less than 5 GB free space remains):
+
+- **Refresh featured sky fields (4,227 archive records across 6 targets & 180 detector/width views)**:
+  Run `Update featured data.cmd`, or execute:
+  ```powershell
+  python -X utf8 sync_featured.py --workers 8
+  python -X utf8 prepare_featured.py
+  ```
+  Existing verified FITS downloads and prepared manifests are reused automatically. Note that `sync_featured.py` downloads 90-arcminute padded source cutouts so rotated 60-arcminute views can be aligned without small-box cropping.
+- **Refresh science calibrations (30 files: QR2/QR3 `spectral_wcs`, QR2/QR3 `solid_angle_pixel_map`, QR3 `epsf`)**:
+  ```powershell
+  python -X utf8 calibrations.py
+  ```
+  Saves files and SHA-256 / URL provenance under `../../work/prototype-cache/calibrations/`.
+- **Rebuild 3D catalogs from NOIRLab Astro Data Lab TAP**:
+  ```powershell
+  python -X utf8 sync_catalogs.py
+  ```
+- **Live archive queries & user FITS imports**:
+  **Search IRSA ↗** queries IRSA TAP (`spherex.artifact` / `spherex.plane`, falling back to SIA) for the entered coordinates, detector, and dates, using collections listed in `archive-config.json`. **Data & updates ↗** also supports importing user-supplied SPHEREx Level-2 FITS files (`IMAGE`, `FLAGS`, `VARIANCE`, `WCS-WAVE`). Restart the server after editing `archive-config.json`.
+
+## Scientific scope & limits
+
+- **Wavelength is not physical depth**: SPHEREx spectral images record brightness vs. wavelength across linear variable filter bands (`0.75–5.00 µm`), not radial distance. The 3D map uses independent physical distances from DESI redshifts (Planck18 cosmology) and Gaia parallaxes.
+- **Exploratory single-source photometry**: `spectroscopy.py` fits one fixed-position ePSF at a time without joint multi-source deblending. Bright, saturated, crowded, or fast-moving sources (such as RW Aurigae, R Draconis, Barnard’s Star, or Vesta) can fail quality checks and are flagged or excluded from chemical screening rather than plotted as clean.
+- **Time-separated wavelengths**: Different wavelengths at a fixed sky position are frequently observed on different dates. Intrinsic source variability or object motion across epochs can imitate spectral slopes or dips.
+- **Candidate screening is not identification**: Absorption feature cards (`H2O`, `CH4`, `CH3OH`, `CO2`, `CO`) test a local linear continuum against reference wavelength windows using clean, same-detector, same-release points within 14 days, requiring `>= 5σ` depth including a conservative `5%` continuum error floor. This score is neither a statistical identification probability nor a composition percentage, and does not distinguish gas vs. ice or source vs. foreground absorption.
+- **Catalog completeness**: `galaxies.json` and `stars.json` are quality-filtered samples (`10,000` galaxies, `5,000` stars within 200 pc), not volume-complete maps. Empty sky regions reflect survey footprints and selection cuts. DESI distance errors propagate formal redshift error only (no peculiar velocities or cosmological model uncertainty); Gaia distances apply no parallax zero-point correction.
+
+## Scientific & archive references
+
+- NASA/IPAC SPHEREx Archive: [https://irsa.ipac.caltech.edu/Missions/spherex.html](https://irsa.ipac.caltech.edu/Missions/spherex.html)
+- SPHEREx Quick Release Overview (QR2 / QR3): [https://irsa.ipac.caltech.edu/data/SPHEREx/docs/overview_qr.html](https://irsa.ipac.caltech.edu/data/SPHEREx/docs/overview_qr.html)
+- SPHEREx Archive Documentation — Data Access: [https://caltech-ipac.github.io/spherex-archive-documentation/spherex-data-access/](https://caltech-ipac.github.io/spherex-archive-documentation/spherex-data-access/)
+- SPHEREx Archive Documentation — Data Products: [https://caltech-ipac.github.io/spherex-archive-documentation/spherex-data-products/](https://caltech-ipac.github.io/spherex-archive-documentation/spherex-data-products/)
+- SPHEREx Spectrophotometry Tool & Flags: [https://irsa.ipac.caltech.edu/onlinehelp/spherex/spherex/sp.html](https://irsa.ipac.caltech.edu/onlinehelp/spherex/spherex/sp.html)
+- Official SPHEREx PSF Tutorial: [https://caltech-ipac.github.io/irsa-tutorials/spherex-psf/](https://caltech-ipac.github.io/irsa-tutorials/spherex-psf/)
+- SPHEREx Planned Data Delivery Schedule: [https://spherex.caltech.edu/page/data-products](https://spherex.caltech.edu/page/data-products)
+- DESI DR1 Public Access: [https://data.desi.lbl.gov/doc/releases/dr1/](https://data.desi.lbl.gov/doc/releases/dr1/)
+- Gaia DR3 Documentation: [https://www.cosmos.esa.int/web/gaia/data-release-3](https://www.cosmos.esa.int/web/gaia/data-release-3)
+- NASA Webb Chamaeleon I Dark Cloud Ice Spectra: [https://science.nasa.gov/asset/webb/chamaeleon-i-dark-cloud-nircam-nirspec-and-miri-spectra/](https://science.nasa.gov/asset/webb/chamaeleon-i-dark-cloud-nircam-nirspec-and-miri-spectra/)

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browse real NASA SPHEREx observations in a local sky image viewer.">
+  <title>SPHEREx Field Viewer</title>
+  <link rel="stylesheet" href="viewer.css?v=2">
+  <script src="data/collection.js" defer></script>
+  <script src="data/detectors.js" defer></script>
+  <script src="viewer.js?v=2" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="mast-inner">
+      <div class="brand">
+        <svg viewBox="0 0 40 40" width="34" height="34" fill="none" aria-hidden="true">
+          <circle cx="20" cy="20" r="11.5" stroke="currentColor" stroke-width="1.4"/>
+          <ellipse cx="20" cy="20" rx="18" ry="6.6" transform="rotate(-35 20 20)" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="32.8" cy="10.9" r="2.3" fill="currentColor"/>
+          <path d="M20 15v10m-5-5h10" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+        <div><strong>SPHEREx</strong><span> / FIELD VIEWER</span></div>
+      </div>
+      <a class="source-tag" href="https://irsa.ipac.caltech.edu/Missions/spherex.html" target="_blank" rel="noreferrer">
+        <span class="status-dot"></span> NASA / IPAC IRSA <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="eyebrow"><span></span> INFRARED SKY ARCHIVE</div>
+      <h1 id="page-title">The sky over time<span>.</span></h1>
+      <p>Explore full SPHEREx detector images in color. Choose a sky field, an infrared band, and a date.</p>
+      <p class="inventory" id="inventory"></p>
+    </section>
+    <p id="load-error" class="load-error" hidden>The image library couldn’t be loaded. Keep the <code>data</code> folder beside this page and reopen it.</p>
+    <noscript><p class="load-error">Turn on JavaScript in your browser to use the image viewer.</p></noscript>
+    <div class="workspace" id="workspace" hidden>
+      <nav class="library panel" aria-label="Sky fields">
+        <div class="section-label">SKY FIELDS <span id="field-count"></span></div>
+        <div class="fields" id="fields"></div>
+        <div class="library-footer">Full views show the entire detector. The aligned crop keeps the same sky coordinates on each date.</div>
+      </nav>
+
+      <section class="viewer panel" aria-labelledby="field-name">
+        <div class="viewer-heading">
+          <div><div class="section-label" id="field-category"></div><h2 id="field-name"></h2></div>
+          <div class="view-toggles">
+            <button type="button" class="minor" id="full-view" aria-pressed="true">Full detector</button>
+            <button type="button" class="minor" id="aligned-view" aria-pressed="false">Aligned crop</button>
+          </div>
+        </div>
+        <div class="band-toolbar" id="band-toolbar">
+          <div class="band-header">
+            <span class="section-label">INFRARED BAND</span>
+            <button type="button" class="minor" id="color-toggle" aria-pressed="true">Band colors</button>
+          </div>
+          <div class="bands" id="bands" aria-label="Choose a detector"></div>
+        </div>
+        <div class="sky">
+          <div class="sky-frame">
+            <img id="sky-image" alt="">
+            <div id="marker" class="marker" aria-hidden="true" hidden></div>
+          </div>
+          <div class="sky-label sky-north" id="sky-north" aria-hidden="true" hidden>↑ N<br>← E</div>
+          <div class="sky-label sky-scale" id="sky-width"></div>
+          <div class="sky-label sky-id" id="sky-frame-number"></div>
+        </div>
+        <div class="view-note">
+          <p id="view-note"></p>
+          <button type="button" class="minor" id="marker-toggle" aria-pressed="true">Vesta marker</button>
+        </div>
+        <div class="transport">
+          <button type="button" id="play" class="play" aria-pressed="false"><span aria-hidden="true">▶</span> Play</button>
+          <button type="button" id="prev" class="square" aria-label="Previous frame" title="Previous frame">‹</button>
+          <button type="button" id="next" class="square" aria-label="Next frame" title="Next frame">›</button>
+          <input type="range" id="timeline" aria-label="Frame number" min="0" step="1" value="0">
+          <select id="speed" aria-label="Playback speed" title="Playback speed">
+            <option value="1600">0.5×</option><option value="800" selected>1×</option><option value="400">2×</option>
+          </select>
+        </div>
+        <div class="filmstrip" id="filmstrip" aria-label="Select an observation"></div>
+      </section>
+
+      <aside class="details panel" aria-labelledby="details-title">
+        <div class="section-label">FRAME DETAILS</div>
+        <h2 id="details-title">Observation</h2>
+        <p class="description" id="field-description"></p>
+        <dl>
+          <div><dt>Captured (UTC)</dt><dd id="observation-time"></dd></div>
+          <div><dt>Observation ID</dt><dd id="observation-id"></dd></div>
+          <div><dt>Sensor / Release</dt><dd id="observation-sensor"></dd></div>
+          <div><dt id="wavelength-label">Infrared band</dt><dd id="observation-wavelength"></dd></div>
+          <div><dt>Field center</dt><dd id="observation-coordinates"></dd></div>
+          <div id="flags-row"><dt>Quality flags at reference point</dt><dd id="observation-flags"></dd></div>
+        </dl>
+        <div class="details-links">
+          <a id="fits-download" download>Download FITS crop <span aria-hidden="true">↓</span></a>
+          <a id="display-image" target="_blank" rel="noreferrer"><span id="display-image-label">Open display image</span> <span aria-hidden="true">↗</span></a>
+          <a id="archive-file" target="_blank" rel="noreferrer">Full image at IRSA <span aria-hidden="true">↗</span></a>
+          <a id="archive-search" target="_blank" rel="noreferrer">Archive search <span aria-hidden="true">↗</span></a>
+        </div>
+        <details>
+          <summary>How this frame was verified</summary>
+          <p id="verification-note"></p>
+          <p class="hash" id="observation-hash"></p>
+        </details>
+      </aside>
+    </div>
+    <footer>
+      <span>Image credit: NASA / SPHEREx / Caltech–IPAC IRSA</span>
+      <span>Visible colors represent infrared bands · Capture times in UTC</span>
+    </footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "galaxies": {
+    "records": 10000,
+    "original_download_sha256_verified": true,
+    "positions_match_source": true,
+    "max_xyz_error": 4.547473508864641e-13,
+    "distance_model_verified": true
+  },
+  "stars": {
+    "records": 5000,
+    "original_download_sha256_verified": true,
+    "positions_match_source": true,
+    "max_xyz_error": 2.842170943040401e-14,
+    "distance_model_verified": true
+  }
+}

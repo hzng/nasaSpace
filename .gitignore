@@ -1,0 +1,16 @@
+# Downloaded observations, rendered frames, and local test artifacts (tens of GB)
+work/
+
+# Python and editor state
+__pycache__/
+*.py[cod]
+.venv/
+.vscode/
+.idea/
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
