@@ -2,7 +2,14 @@
 const StarTracker = (() => {
   let result=null, choice=null, anchor2=null, awaitingAnchor2=false, version=0, timer=null, yaw=.6, pitch=.3, zoom=1;
   const setText=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
+  const PRED='#c9a0ff', BAD='#f0806e';
+  let typedObject=false;
+  const prefillObject=()=>{if(!typedObject)$("track-object").value=state.field==='vesta'?'Vesta':'';};
+  $("track-object").addEventListener('input',()=>{typedObject=true;});
   const compass=deg=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8];
+
+  const fmtSpeed=m=>m.preferred_unit==='hr'?`${m.speed_arcsec_per_hr.toFixed(1)} ″/hr`:`${m.speed_arcsec_per_year.toFixed(2)} ″/yr`;
+  const fmtHead=m=>`${m.heading_deg.toFixed(0)}° ${compass(m.heading_deg)}`;
 
   function resetAnchorBtn(){
     awaitingAnchor2=false;
@@ -16,13 +23,13 @@ const StarTracker = (() => {
     $("track-result").hidden=true;
     $("track-3d").disabled=true;
     $("track-star").disabled=false;
-    $("track-status").textContent="Click a star or asteroid, then track its path.";
+    $("track-status").textContent="Click a star or asteroid, then track its path.";$("track-status").classList.remove("track-error");
     setText("track-kind-pill","Ready");
     setText("kpi-speed","—");setText("kpi-heading","—");setText("kpi-change","—");setText("kpi-points","—");
     draw();
   }
 
-  window.addEventListener("sky-session-ready",clear);
+  window.addEventListener("sky-session-ready",()=>{clear();prefillObject();});
   window.addEventListener("sky-point-picked",event=>{
     if(awaitingAnchor2 && choice && event.detail.frame !== choice.frame){
       anchor2=event.detail;
@@ -48,11 +55,14 @@ const StarTracker = (() => {
 
   $("track-star").onclick=async()=>{
     if(!state.session?.frames.length)return;
-    if(!choice){$("track-status").textContent="Click a star or moving object in the image first.";return;}
-    const token=++version;$("track-star").disabled=true;
+    const obj=$("track-object").value.trim();
+    if(!choice&&!obj){$("track-status").textContent="Click a star or moving object in the image first, or type a Solar System object.";return;}
+    const token=++version;$("track-star").disabled=true;$("track-status").classList.remove("track-error");
     try{
-      const body={session:state.session.id,frame:choice.frame,x:choice.x,y:choice.y};
-      if(anchor2)body.anchor2={frame:anchor2.frame,x:anchor2.x,y:anchor2.y};
+      const body={session:state.session.id,frame:choice?choice.frame:state.index};
+      if(choice){body.x=choice.x;body.y=choice.y;}
+      if(obj)body.object=obj;
+      if(anchor2&&!obj)body.anchor2={frame:anchor2.frame,x:anchor2.x,y:anchor2.y};
       const job=await api('/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       while(token===version){
         const status=await api('/api/jobs/'+job.id);if(token!==version)return;
@@ -61,7 +71,7 @@ const StarTracker = (() => {
         if(status.status==='complete'){result=status.result;render();draw();break;}
         await new Promise(resolve=>setTimeout(resolve,600));
       }
-    }catch(e){if(token===version)$("track-status").textContent=e.message;}
+    }catch(e){if(token===version){$("track-status").textContent=e.message;$("track-status").classList.add("track-error");}}
     finally{if(token===version)$("track-star").disabled=false;}
   };
 
@@ -119,6 +129,33 @@ const StarTracker = (() => {
     svgEl(svg,'text',{x:x1,y:138,fill:'#71d9f6','font-size':10,'text-anchor':'end'},`Peak ${maxSpd.toFixed(2)} ${useHr?'″/hr':'″/yr'}`);
   }
 
+  const f=(v,d=1)=>v==null?'n/a':Number(v).toFixed(d);
+  function predTip(p){
+    if(!p.predicted_sky)return '';
+    const r=p.rate_arcsec_per_hr;
+    return `\nJPL predicted RA ${f(p.predicted_sky[0],5)}° Dec ${f(p.predicted_sky[1],5)}°`
+      +(p.offset_arcsec!=null?`\nOffset (measured − predicted) ${f(p.offset_arcsec)}″ (E ${f(p.offset_east_arcsec)}″, N ${f(p.offset_north_arcsec)}″), tolerance ${f(p.tolerance_arcsec)}″${p.within_tolerance===false?' · OUTSIDE TOLERANCE':''}`:'')
+      +(r?`\nRate ${f(r[0],2)}″/hr RA·cosDec, ${f(r[1],2)}″/hr Dec (instantaneous, includes spacecraft orbital parallax)`:'')
+      +`\nDistance ${f(p.delta_au,3)} au · light time ${f(p.light_time_min)} min`;
+  }
+  function renderEphemeris(e){
+    $("track-eph").hidden=!e;
+    if(!e)return;
+    setText("track-source",`${e.source} · ${e.object} · observer: ${e.observer} · retrieved ${(e.retrieved_utc||'').replace('T',' ').slice(0,16)} UTC${e.from_cache?' · cached':''}`);
+    setText("track-timescale",`Time scale: ${e.time_scale}`);
+    $("track-warnings").replaceChildren(...(e.warnings||[]).map(t=>{const li=document.createElement('li');li.textContent='Warning: '+t;return li;}));
+    const flag=$("track-flag"), rule=`tolerance: ${e.tolerance_rule}`;
+    flag.hidden=false;
+    if(!e.compared){
+      setText("track-offset",`No frame could be compared with a measurement; ${rule}`);
+      flag.className='track-flag bad';flag.textContent='Prediction shown, not confirmed: no measured position to check it against.';
+    }else{
+      setText("track-offset",`Offset median ${f(e.offset_median_arcsec)}″ · max ${f(e.offset_max_arcsec)}″ over ${e.compared} frames · ${rule}`);
+      flag.className='track-flag'+(e.flagged?' bad':'');
+      flag.textContent=e.flagged?`⚠ ${e.flagged} of ${e.compared} frames disagree with the ephemeris beyond tolerance`:`All ${e.compared} compared frames agree with the ephemeris within tolerance`;
+    }
+  }
+
   function render(){
     const points=result.points.filter(p=>p.accepted).sort((a,b)=>a.mjd-b.mjd);
     const c=result.catalog, m=result.motion, ch=result.change;
@@ -132,11 +169,15 @@ const StarTracker = (() => {
 
     if(m){
       const useHr=m.preferred_unit==='hr';
-      setText("kpi-speed",useHr?`${m.speed_arcsec_per_hr.toFixed(1)} ″/hr`:`${m.speed_arcsec_per_year.toFixed(2)} ″/yr`);
-      setText("kpi-heading",`${m.heading_deg.toFixed(0)}° ${compass(m.heading_deg)}`);
+      setText("kpi-speed",fmtSpeed(m));
+      setText("kpi-heading",fmtHead(m));
     }else{
       setText("kpi-speed","—");setText("kpi-heading","—");
     }
+    const eph=result.ephemeris, em=eph?.motion;
+    setText("kpi-speed-pred",em?`predicted ${fmtSpeed(em)}`:"");
+    setText("kpi-heading-pred",em?`predicted ${fmtHead(em)}`:"");
+    renderEphemeris(eph);
     setText("kpi-change",ch?ch.state:`${points.length>=2?'Linear':'Single epoch'}`);
     setText("kpi-points",`${points.length} / ${result.points.length} pts`);
 
@@ -150,7 +191,8 @@ const StarTracker = (() => {
     $("track-summary").textContent=driftMsg+chMsg+gaiaMsg;
 
     const svg=$("track-plot");svg.replaceChildren();if(!points.length)return;
-    const span=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec));
+    const preds=eph?result.points.filter(p=>p.predicted_east_arcsec!=null).sort((a,b)=>a.mjd-b.mjd):[];
+    const span=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec),...preds.map(p=>Math.max(Math.abs(p.predicted_east_arcsec),Math.abs(p.predicted_north_arcsec))));
     const scale=64/span, ox=200, oy=82;
     svgEl(svg,'path',{d:'M60 82H340 M200 12V152',stroke:'#384150'});
     // Trajectory path line connecting measured positions chronologically
@@ -163,7 +205,13 @@ const StarTracker = (() => {
       const ang=Math.atan2(ay2-ay1,ax2-ax1);
       svgEl(svg,'path',{d:`M${ax2-7*Math.cos(ang-.45)} ${ay2-7*Math.sin(ang-.45)} L${ax2} ${ay2} L${ax2-7*Math.cos(ang+.45)} ${ay2-7*Math.sin(ang+.45)}`,fill:'none',stroke:'#f5f7fa','stroke-width':1.6});
     }
-    svgEl(svg,'text',{x:10,y:170,fill:'#9fb0c4','font-size':10},`East → / North ↑ · ±${span.toFixed(1)}″ · green=core · cyan=wing`);
+    svgEl(svg,'text',{x:10,y:170,fill:'#9fb0c4','font-size':10},eph?`East → / North ↑ · ±${span.toFixed(1)}″ · solid=measured · dashed=predicted (JPL)`:`East → / North ↑ · ±${span.toFixed(1)}″ · green=core · cyan=wing`);
+    if(preds.length){
+      const px=p=>ox+scale*p.predicted_east_arcsec, py=p=>oy-scale*p.predicted_north_arcsec;
+      for(const p of points)if(p.predicted_east_arcsec!=null)svgEl(svg,'line',{x1:ox+scale*p.east_arcsec,y1:oy-scale*p.north_arcsec,x2:px(p),y2:py(p),stroke:p.within_tolerance===false?BAD:PRED,'stroke-width':1,'stroke-opacity':.8});
+      svgEl(svg,'path',{d:preds.map((p,i)=>`${i?'L':'M'}${px(p).toFixed(1)} ${py(p).toFixed(1)}`).join(' '),fill:'none',stroke:PRED,'stroke-width':1.6,'stroke-dasharray':'5 4'});
+      for(const p of preds)svgEl(svg,'path',{d:`M${px(p)} ${py(p)-4}L${px(p)+4} ${py(p)}L${px(p)} ${py(p)+4}L${px(p)-4} ${py(p)}Z`,fill:'none',stroke:PRED,'stroke-width':1.3});
+    }
     for(const p of points){
       const x=ox+scale*p.east_arcsec, y=oy-scale*p.north_arcsec;
       const col=p.fit_mode==='wing'?'#71d9f6':'#68d391';
@@ -171,7 +219,7 @@ const StarTracker = (() => {
       const n=svgEl(svg,'circle',{cx:x,cy:y,r:3.4,fill:col,tabindex:0,role:'button','aria-label':p.timestamp});
       n.onclick=()=>setFrame(p.index);n.onkeydown=e=>{if(e.key==='Enter')setFrame(p.index);};
       const title=document.createElementNS('http://www.w3.org/2000/svg','title');
-      title.textContent=`${p.timestamp} (${p.fit_mode||'core'}) ΔE=${p.east_arcsec.toFixed(2)}″ ΔN=${p.north_arcsec.toFixed(2)}″`;
+      title.textContent=`${p.timestamp} (${p.fit_mode||'core'}) ΔE=${p.east_arcsec.toFixed(2)}″ ΔN=${p.north_arcsec.toFixed(2)}″`+predTip(p);
       n.append(title);
     }
     renderChangeChart();
@@ -187,6 +235,14 @@ const StarTracker = (() => {
     if(ordered.length>=2){
       ctx.strokeStyle='rgba(113,217,246,.28)';ctx.setLineDash([4,4]);ctx.lineWidth=1.4;ctx.beginPath();
       ordered.forEach((pt,idx)=>{const px=left+pt.xy[0]*side,py=top+pt.xy[1]*side;idx?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+      ctx.stroke();ctx.setLineDash([]);
+    }
+
+    // JPL predicted track (dashed, purple) through every point with a prediction
+    const predTrack=result.ephemeris?result.points.filter(v=>v.predicted).sort((a,b)=>a.mjd-b.mjd):[];
+    if(predTrack.length){
+      ctx.strokeStyle=PRED;ctx.setLineDash([7,4]);ctx.lineWidth=1.6;ctx.beginPath();
+      predTrack.forEach((pt,idx)=>{const px=left+pt.predicted[0]*side,py=top+pt.predicted[1]*side;idx?ctx.lineTo(px,py):ctx.moveTo(px,py);});
       ctx.stroke();ctx.setLineDash([]);
     }
 
@@ -206,7 +262,8 @@ const StarTracker = (() => {
     const xy=p.accepted?p.xy:p.predicted;
     if(xy){
       const x=left+xy[0]*side, y=top+xy[1]*side;
-      const stroke=p.accepted?(p.fit_mode==='wing'?'#71d9f6':activeColor):'#eab354';
+      const bad=p.accepted&&p.within_tolerance===false;
+      const stroke=bad?BAD:p.accepted?(p.fit_mode==='wing'?'#71d9f6':activeColor):'#eab354';
       ctx.strokeStyle=stroke;ctx.lineWidth=1.8;ctx.setLineDash(p.accepted?[]:[4,4]);
       ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
 
@@ -229,6 +286,13 @@ const StarTracker = (() => {
       ctx.font='600 12px Segoe UI';ctx.fillStyle=stroke;
       const label=p.accepted?(p.fit_mode==='wing'?'Wing fit':'Measured'):'Predicted';
       ctx.fillText(label,x+23,y-12);
+      if(result.ephemeris&&p.predicted){
+        const qx=left+p.predicted[0]*side,qy=top+p.predicted[1]*side;
+        ctx.strokeStyle=PRED;ctx.lineWidth=2;ctx.beginPath();
+        ctx.moveTo(qx,qy-7);ctx.lineTo(qx+7,qy);ctx.lineTo(qx,qy+7);ctx.lineTo(qx-7,qy);ctx.closePath();ctx.stroke();
+        if(p.accepted&&p.offset_arcsec!=null)ctx.fillText(`Δ ${p.offset_arcsec.toFixed(1)}″${bad?' · outside tolerance':''}`,x+23,y+4);
+        ctx.fillStyle=PRED;ctx.fillText('JPL predicted',qx+10,qy+18);
+      }
     }
     ctx.restore();
   }

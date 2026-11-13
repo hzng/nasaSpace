@@ -312,7 +312,7 @@ def create_track(job_id, payload):
         manifest=json.loads((CACHE/sid/'manifest.json').read_text())
         refresh_featured()
         with LOCK: lookup={r['sha256']:r for r in RECORDS}
-        paths,guide_skies=[],[]
+        paths=[]
         for frame in manifest['frames']:
             rec=lookup.get(frame['sha256'])
             path=rec['path'] if rec else None
@@ -321,13 +321,13 @@ def create_track(job_id, payload):
                 if not re.fullmatch(r'[a-f0-9]{64}\.fits',filename): raise ValueError('Original FITS unavailable')
                 path=str(CACHE/filename)
             paths.append(path)
-            guide_skies.append(rec.get('marker_sky') if rec else None)
         def progress(message):
             with LOCK: JOBS[job_id].update(stage=message)
-        result=track(manifest,paths,payload,CACHE,progress,guide_skies=guide_skies)
+        result=track(manifest,paths,payload,CACHE,progress)
         with LOCK: JOBS[job_id].update(status='complete',stage='Track ready',result=result)
     except Exception as error:
-        traceback.print_exc()
+        from ephemeris import EphemerisError
+        if not isinstance(error,EphemerisError): traceback.print_exc()
         with LOCK: JOBS[job_id].update(status='failed',stage=str(error))
 
 

@@ -229,6 +229,9 @@
               </div>
               <p id="track-status" role="status">Click a star or asteroid, then track its path.</p>
             </div>
+            <label class="track-object" for="track-object">Solar System object (optional, uses JPL Horizons)
+              <input id="track-object" type="text" placeholder="Vesta, 4, 433 Eros" autocomplete="off" spellcheck="false">
+            </label>
             <div class="tracking-actions">
               <button id="track-star" type="button" class="btn-brass">Track point</button>
               <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false">Pick 2nd</button>
@@ -236,9 +239,16 @@
               <button id="track-clear" type="button" class="btn-ghost">Clear</button>
             </div>
             <div id="track-result" hidden>
+              <div id="track-eph" class="track-eph" hidden>
+                <p id="track-source" class="track-source"></p>
+                <p id="track-timescale"></p>
+                <ul id="track-warnings" class="track-warnings"></ul>
+                <p id="track-offset"></p>
+                <p id="track-flag" class="track-flag" role="alert" hidden></p>
+              </div>
               <div id="track-kpis" class="track-kpis">
-                <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong></div>
-                <div class="track-kpi"><span>Heading</span><strong id="kpi-heading">—</strong></div>
+                <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong><small id="kpi-speed-pred"></small></div>
+                <div class="track-kpi"><span>Heading</span><strong id="kpi-heading">—</strong><small id="kpi-heading-pred"></small></div>
                 <div class="track-kpi"><span>Change</span><strong id="kpi-change">—</strong></div>
                 <div class="track-kpi"><span>Measured</span><strong id="kpi-points">—</strong></div>
               </div>
