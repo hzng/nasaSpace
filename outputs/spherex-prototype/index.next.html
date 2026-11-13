@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Inspect real archived SPHEREx observations, spectra, and catalog 3D distances.">
+  <title>SPHEREx · Celestial Workbench</title>
+  <link rel="stylesheet" href="app.next.css?v=1">
+  <script src="app.js?v=5" defer></script>
+  <script src="light.js?v=2" defer></script>
+  <script src="universe.js?v=2" defer></script>
+  <script src="tracking.js?v=6" defer></script>
+</head>
+<body>
+  <header class="app-bar">
+    <div class="app-bar-left">
+      <a href="/" class="crest" aria-label="SPHEREx Celestial Workbench home">
+        <svg class="crest-mark" width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+          <circle cx="13" cy="13" r="10.5" stroke="currentColor" stroke-width="1.4" stroke-opacity="0.28"/>
+          <ellipse cx="13" cy="13" rx="10.5" ry="4.4" transform="rotate(-28 13 13)" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M13 6.2v2.4M13 17.4v2.4M6.2 13h2.4M17.4 13h2.4" stroke="#6cb8ff" stroke-width="1.35" stroke-linecap="round"/>
+          <circle cx="13" cy="13" r="2.2" fill="currentColor"/>
+        </svg>
+        <span class="crest-title">
+          <strong>SPHEREx</strong>
+        </span>
+      </a>
+    </div>
+
+    <nav class="main-modes" aria-label="Primary workspace">
+      <button id="observations-mode" type="button" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="8" cy="8" r="5.5"/>
+          <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2"/>
+        </svg>
+        <span>Sky</span>
+      </button>
+      <button id="universe-mode" type="button" aria-pressed="false">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="4.5" cy="11.5" r="1.6"/>
+          <circle cx="12" cy="4.5" r="1.6"/>
+          <circle cx="11.5" cy="11.5" r="1.3"/>
+          <path d="M5.7 10.3L10.7 5.7M6.1 11.5h4"/>
+        </svg>
+        <span>3D Map</span>
+      </button>
+    </nav>
+
+    <div class="app-bar-right">
+      <span id="inventory" class="archive-stat">Loading…</span>
+      <button id="updates-button" type="button" class="btn-outline btn-compact btn-trail">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.5" y="3" width="11" height="4" rx="1.2"/>
+          <rect x="2.5" y="9" width="11" height="4" rx="1.2"/>
+          <circle cx="5" cy="5" r="0.6" fill="currentColor" stroke="none"/>
+          <circle cx="5" cy="11" r="0.6" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Archive</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div id="observations-workspace">
+      <section class="command-deck" aria-label="Target selector">
+        <div class="target-strip-row">
+          <span class="deck-caption">Targets</span>
+          <nav id="fields" class="target-pills" aria-label="Saved fields"></nav>
+          <button id="import-shortcut" type="button" class="btn-ghost btn-trail">
+            <span>Import FITS</span>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V3.5M4.5 7L8 3.5 11.5 7M3 13.5h10"/></svg>
+          </button>
+        </div>
+
+        <form id="search-form" class="query-strip" aria-label="Sky search">
+          <label class="input-group" title="Right ascension (ICRS): decimal degrees or hh:mm:ss">
+            <span>RA</span>
+            <input id="ra" value="222.9452745" required aria-describedby="coordinate-help" placeholder="deg or h:m:s">
+          </label>
+          <label class="input-group" title="Declination (ICRS): decimal degrees or ±dd:mm:ss">
+            <span>Dec</span>
+            <input id="dec" value="-11.9498975" required placeholder="deg or d:m:s">
+          </label>
+
+          <div class="input-group">
+            <label for="fov">Width</label>
+            <div class="stepper">
+              <button type="button" id="fov-prev" class="static" aria-label="Previous field width">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
+              </button>
+              <select id="fov">
+                <option value="5">5 arcmin</option>
+                <option value="10">10 arcmin</option>
+                <option value="15" selected>15 arcmin</option>
+                <option value="30">30 arcmin</option>
+                <option value="60">60 arcmin</option>
+              </select>
+              <button type="button" id="fov-next" class="static" aria-label="Next field width">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="detector">Band</label>
+            <div class="stepper">
+              <button type="button" id="detector-prev" class="static" aria-label="Previous detector">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
+              </button>
+              <select id="detector">
+                <option value="1">D1 · 0.75–1.09 µm</option>
+                <option value="2">D2 · 1.10–1.62 µm</option>
+                <option value="3" selected>D3 · 1.63–2.41 µm</option>
+                <option value="4">D4 · 2.42–3.82 µm</option>
+                <option value="5">D5 · 3.83–4.41 µm</option>
+                <option value="6">D6 · 4.42–5.00 µm</option>
+              </select>
+              <button type="button" id="detector-next" class="static" aria-label="Next detector">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="query-buttons">
+            <button type="submit" class="btn-brass btn-trail" id="search-button">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>
+              <span>Load patch</span>
+            </button>
+            <button type="button" id="archive-search" class="btn-outline btn-trail">
+              <span>Search IRSA</span>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11L11 5M6 5h5v5"/></svg>
+            </button>
+          </div>
+
+          <details class="query-disclosure">
+            <summary>
+              <span class="summary-label">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>
+                <span>Date filter</span>
+              </span>
+              <span id="source-state">UTC · Auto</span>
+            </summary>
+            <div class="date-filter">
+              <span id="coordinate-help">Deg or h:m:s</span>
+              <label>From <input type="date" id="start"></label>
+              <label>To <input type="date" id="end"></label>
+            </div>
+          </details>
+        </form>
+      </section>
+
+      <div id="status" role="status" aria-live="polite" class="status">Ready</div>
+
+      <div class="workbench">
+        <section class="surface-card stage-pane" aria-labelledby="field-title">
+          <div class="card-header">
+            <div class="target-title-block">
+              <h1 id="field-title">Vesta</h1>
+              <p class="coord-sub" id="field-type"></p>
+            </div>
+            <div class="stage-header-actions">
+              <div class="segmented" aria-label="View mode">
+                <button id="mode-single" type="button" class="static" aria-pressed="true" title="Single frame view">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/></svg>
+                  <span>Single</span>
+                </button>
+                <button id="mode-split" type="button" class="static" aria-pressed="false" title="Side-by-side comparison">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M8 3v10"/></svg>
+                  <span>Compare</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="vesta-callout">
+            <p id="target-note" class="callout-banner" hidden></p>
+            <button id="vesta-example" type="button" class="btn-ghost example-shortcut" hidden>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v3l2 1.5"/></svg>
+              <span>Load archived Vesta example · Aug 4–5</span>
+            </button>
+            <div id="vesta-guide" class="vesta-guide" hidden><strong>Vesta walkthrough</strong><span id="vesta-guide-text">The gold circle marks a suggested position in this frame.</span><button id="vesta-next-guide" type="button" class="btn-outline">Show other marked frame →</button></div>
+          </div>
+
+          <div class="viewer-bar">
+            <label class="toggle-chip"><input type="checkbox" id="markers" checked>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>
+              <span>Guides</span>
+            </label>
+            <label class="toggle-chip"><input type="checkbox" id="quality">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2l5.5 2.5v3.8c0 3.3-2.3 5.5-5.5 6.2-3.2-.7-5.5-2.9-5.5-6.2V4.5L8 2z"/></svg>
+              <span>Flags</span>
+            </label>
+            <label class="toggle-chip"><input type="checkbox" id="tint">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="6.2" cy="8" r="3.5"/><circle cx="9.8" cy="8" r="3.5"/></svg>
+              <span>Tint</span>
+            </label>
+
+            <label class="zoom-control" title="Zoom sky viewport">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg>
+              <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
+              <output id="zoom-value">1.0×</output>
+            </label>
+            <button id="reset-view" type="button" class="btn-ghost" title="Reset pan and zoom">Reset</button>
+          </div>
+
+          <div id="viewers" class="viewers" aria-busy="false">
+            <div id="view-message" class="view-message" hidden role="status"></div>
+            <div class="image-pane" id="primary-pane">
+              <canvas id="sky" tabindex="0" aria-label="Aligned sky image. Click to inspect a pixel, drag to pan, or use the zoom control."></canvas>
+              <span class="hud-badge hud-bl" id="frame-caption">Loading</span>
+              <span class="hud-badge hud-tl compass" aria-label="Orientation North up, East left">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M13 13V4.5M10.8 6.7L13 4.5l2.2 2.2M13 13H4.5M6.7 10.8L4.5 13l2.2 2.2"/></svg>
+                <span>N↑ E←</span>
+              </span>
+              <span class="hud-badge hud-br" id="scale-label"></span>
+              <span class="hud-badge hover-flag-badge" id="hover-flag-badge" hidden></span>
+            </div>
+            <div class="image-pane" id="reference-pane" hidden>
+              <canvas id="reference" tabindex="0" aria-label="Reference sky image"></canvas>
+              <span class="hud-badge hud-bl" id="reference-caption"></span>
+              <span class="hud-badge hud-tl compass">N↑ E←</span>
+            </div>
+          </div>
+
+          <div class="legend-strip">
+            <span id="guide-legend" class="legend-marks" aria-label="Mark legend"></span>
+            <span id="flag-legend" class="legend-item" hidden>
+              <i class="legend-swatch"></i>
+              <span>Detector artifact mask</span>
+            </span>
+          </div>
+
+          <div class="tracking-bar">
+            <div class="tracking-head">
+              <div class="tracking-title-row">
+                <strong>Motion tracker</strong>
+                <span id="track-kind-pill" class="track-kind-pill">Ready</span>
+              </div>
+              <p id="track-status" role="status">Click a star or asteroid, then track its path.</p>
+            </div>
+            <div class="tracking-actions">
+              <button id="track-star" type="button" class="btn-brass">Track point</button>
+              <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false" title="Needs a clicked point first. Then step to another frame and click the moving object to anchor its path.">Pick 2nd</button>
+              <button id="track-3d" type="button" class="btn-outline" disabled title="Needs a tracked Gaia DR3 star with a reliable distance (parallax over 20 times its error, RUWE below 1.4).">3D motion</button>
+              <button id="track-clear" type="button" class="btn-ghost">Clear</button>
+            </div>
+            <p id="track-help" class="track-help">Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.</p>
+            <div id="track-result" hidden>
+              <div id="track-kpis" class="track-kpis">
+                <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong></div>
+                <div class="track-kpi"><span>Heading</span><strong id="kpi-heading">—</strong></div>
+                <div class="track-kpi"><span>Change</span><strong id="kpi-change">—</strong></div>
+                <div class="track-kpi"><span>Measured</span><strong id="kpi-points">—</strong></div>
+              </div>
+              <div class="track-charts">
+                <svg id="track-plot" viewBox="0 0 400 180" role="img" aria-label="Measured sky trajectory relative to the reference observation"></svg>
+                <svg id="track-change-plot" viewBox="0 0 400 150" role="img" aria-label="Cumulative path and interval speed over time"></svg>
+              </div>
+              <p id="track-summary"></p>
+              <div class="track-result-actions">
+                <button id="track-path" type="button" class="btn-outline btn-compact" hidden>Predicted path details</button>
+                <button id="track-export" type="button" class="btn-outline btn-compact">Export JSON</button>
+              </div>
+              <details>
+                <summary>Method &amp; limits</summary>
+                <p>Measures native-pixel 2D Gaussian centroids (with unsaturated wing fallback on bright or saturated cores). Matches Gaia DR3 when unique, follows archived ephemerides for Solar System objects like Vesta, or uses an optional 2nd-frame anchor for custom moving objects. Click any point or speed bar to jump frames.</p>
+              </details>
+            </div>
+          </div>
+          <div class="transport">
+            <button id="play" type="button" class="btn-brass" aria-pressed="false">
+              <span class="play-icon-slot" aria-hidden="true">
+                <svg class="icon-play" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.8 3.2v9.6l8-4.8z"/></svg>
+                <svg class="icon-pause" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="3.8" y="3.2" width="3" height="9.6" rx="0.9"/><rect x="9.2" y="3.2" width="3" height="9.6" rx="0.9"/></svg>
+              </span>
+              <span id="play-label">Play</span>
+            </button>
+            <button id="previous" type="button" class="btn-outline icon-btn" aria-label="Previous frame">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5v9M12.5 3.5L7 8l5.5 4.5"/></svg>
+            </button>
+            <input id="timeline" type="range" min="0" max="0" value="0" step="1" aria-label="Observation frame">
+            <button id="next" type="button" class="btn-outline icon-btn" aria-label="Next frame">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 3.5v9M3.5 3.5L9 8l-5.5 4.5"/></svg>
+            </button>
+            <select id="speed" aria-label="Playback interval">
+              <option value="1400">0.7 fps</option>
+              <option value="800" selected>1.2 fps</option>
+              <option value="350">3.0 fps</option>
+            </select>
+          </div>
+
+          <div class="timeline-heading">
+            <span id="baseline">TIMELINE</span>
+            <label>Compare <select id="reference-date"></select></label>
+          </div>
+
+          <div class="filmstrip" id="filmstrip"></div>
+          <div class="comparison-note" id="comparison-note">ICRS grid</div>
+
+          <details id="excluded-observations" class="excluded-observations" hidden>
+            <summary id="excluded-summary"></summary>
+            <div id="excluded-list"></div>
+          </details>
+
+          <details class="coverage-help">
+            <summary>Coverage policy</summary>
+            <p>Each aligned view uses a padded archive cutout on one ICRS sky grid. Playback requires ≥99% footprint coverage and ≥80% valid unmasked pixels. Brightness also depends on wavelength, background, and flags.</p>
+          </details>
+        </section>
+
+        <div class="science-stack">
+          <aside class="surface-card inspector-card" aria-label="Observation and pixel inspector">
+            <div class="inspector-top">
+              <div class="tabs" role="tablist">
+                <button id="tab-observation" type="button" role="tab" class="static" aria-selected="true">Observation</button>
+                <button id="tab-pixel" type="button" role="tab" class="static" aria-selected="false">Pixel</button>
+              </div>
+              <div class="inspector-util-btns">
+                <button id="share" type="button" class="btn-outline btn-compact" title="Copy view URL">Link</button>
+                <button id="export" type="button" class="btn-outline btn-compact" title="Export session JSON">JSON</button>
+              </div>
+            </div>
+
+            <div id="observation-panel" role="tabpanel">
+              <div class="obs-banner">
+                <div>
+                  <h2 id="observation-date">—</h2>
+                  <p class="obs-utc" id="observation-time"></p>
+                </div>
+                <div class="obs-dl-group">
+                  <a id="fits-link" class="btn-outline btn-compact btn-trail" download>
+                    <span>FITS</span>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v7.5M4.5 7.5L8 11l3.5-3.5M3.5 13h9"/></svg>
+                  </a>
+                  <button id="context-button" type="button" class="btn-outline btn-compact btn-trail">
+                    <span>Full FOV</span>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2.5H13v3.5M6.5 13.5H3V10M13 3L8.5 7.5M3 13l4.5-4.5"/></svg>
+                  </button>
+                  <a id="source-link" class="btn-ghost btn-trail" target="_blank" rel="noreferrer">
+                    <span>IRSA</span>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11L11 5M6 5h5v5"/></svg>
+                  </a>
+                </div>
+              </div>
+
+              <dl id="metadata" class="kv-grid"></dl>
+              <div class="quality-card" id="quality-card"></div>
+
+              <details class="hash-details">
+                <summary>SHA-256</summary>
+                <p id="provenance"></p>
+                <code id="checksum"></code>
+                <p>Aligned view uses asinh stretch; inspector reads native FITS pixels.</p>
+              </details>
+            </div>
+
+            <div id="pixel-panel" role="tabpanel" hidden>
+              <div class="pixel-guide-hint">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8" stroke-opacity="0.35"/>
+                  <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>
+                  <circle cx="12" cy="12" r="2" fill="#6cb8ff" stroke="none"/>
+                </svg>
+                <strong class="intro-pixel">Click sky pixel</strong>
+              </div>
+              <div id="pixel-result"></div>
+              <a class="btn-ghost flag-ref btn-trail" target="_blank" rel="noreferrer" href="https://irsa.ipac.caltech.edu/onlinehelp/spherex/spherex/sp.html">
+                <span>IRSA flags</span>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11L11 5M6 5h5v5"/></svg>
+              </a>
+            </div>
+          </aside>
+
+          <section id="light-panel" class="surface-card light-panel" aria-labelledby="light-title">
+            <div class="card-header">
+              <div class="target-title-block">
+                <h2 id="light-title">Spectrum</h2>
+                <p id="light-position" class="coord-sub">Center default</p>
+              </div>
+              <button id="measure-light" type="button" class="btn-brass btn-trail">
+                <span>Measure</span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h2.5l2-5 3 7 2-3.5H14"/></svg>
+              </button>
+            </div>
+
+            <div class="light-controls">
+              <label>Window
+                <select id="light-scope">
+                  <option value="near">±7 days</option>
+                  <option value="dates">Viewer dates</option>
+                  <option value="all">All dates</option>
+                </select>
+              </label>
+              <label title="Reference redshift z">z
+                <input id="light-redshift" type="number" value="0" min="0" max="5" step="0.001">
+              </label>
+              <label class="check-label">
+                <input type="checkbox" id="light-review" checked> Flagged
+              </label>
+              <button id="light-center" type="button" class="btn-outline btn-compact">Center</button>
+            </div>
+
+            <p id="light-status" class="comparison-note" role="status">Ready</p>
+
+            <div id="light-result" hidden>
+              <div class="light-controls plot-toolbar">
+                <div class="segmented">
+                  <button id="plot-spectrum" type="button" class="static" aria-pressed="true">Spectrum</button>
+                  <button id="plot-time" type="button" class="static" aria-pressed="false">Time</button>
+                </div>
+                <label>Release
+                  <select id="light-release">
+                    <option value="all">All</option>
+                    <option value="QR3">QR3</option>
+                    <option value="QR2">QR2</option>
+                  </select>
+                </label>
+                <label id="time-wave-label" hidden>µm
+                  <input id="time-wave" type="number" value="2" min="0.75" max="5" step="0.01">
+                </label>
+                <label id="time-tolerance-label" hidden>±
+                  <input id="time-tolerance" type="number" value="0.05" min="0.005" max="0.5" step="0.005">
+                </label>
+                <div class="export-pills">
+                  <button id="light-csv" type="button" class="btn-outline btn-compact">CSV</button>
+                  <button id="light-json" type="button" class="btn-outline btn-compact">JSON</button>
+                  <button id="light-svg" type="button" class="btn-outline btn-compact">SVG</button>
+                </div>
+              </div>
+
+              <div class="plot-wrap">
+                <svg id="light-chart" viewBox="0 0 1000 390" role="img" aria-label="Measured light with error bars"></svg>
+              </div>
+              <p id="plot-note" class="plot-note"></p>
+
+              <div class="candidate-heading">
+                <h3>Dip checks</h3>
+              </div>
+              <div id="chemical-candidates" class="chemical-candidates"></div>
+
+              <details class="coverage-help">
+                <summary>Method &amp; refs</summary>
+                <p>Forced ePSF fit calibrated using official spectral WCS and pixel solid-angle maps without deblending. Simplified ≥5σ local-continuum checks (releases separate, ≤14d groups) — screening indicators only. Redshift z shifts rest wavelengths.</p>
+                <div id="light-sources"></div>
+              </details>
+
+              <details class="coverage-help">
+                <summary>Records</summary>
+                <div id="measurement-table" class="measurement-table"></div>
+                <button id="more-measurements" type="button" class="btn-ghost">Show more</button>
+              </details>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <section id="universe-workspace" hidden class="surface-card universe-workspace">
+      <div class="card-header">
+        <div class="target-title-block">
+          <p class="map-eyebrow">THE OBSERVED UNIVERSE</p><h1>Cosmic atlas</h1>
+          <p id="universe-status" class="coord-sub" role="status">Loading…</p>
+        </div>
+        <div class="universe-head-controls">
+          <label>Catalog
+            <select id="universe-kind">
+              <option value="galaxies">Galaxies · DESI DR1</option>
+              <option value="stars">Stars · Gaia DR3</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="atlas-controls">
+        <label>View<select id="atlas-view"><option value="slice">Thin slice · less overlap</option><option value="volume">Full catalog volume</option><option value="nearby">Selected neighborhood</option></select></label>
+        <label>Distance limit <output id="atlas-distance-value"></output><input id="atlas-distance" type="range" min="1" max="100" value="100"></label>
+        <label>Slice thickness <output id="atlas-thickness-value"></output><input id="atlas-thickness" type="range" min="2" max="100" value="6"></label>
+        <label class="check-label"><input id="atlas-grid" type="checkbox"> Coordinate guides</label>
+        <button id="atlas-fit" class="btn-outline">Fit visible objects</button>
+      </div>
+      <p id="atlas-context" class="atlas-context">Measured positions · each point is a catalog object · symbols are not resolved photographs</p>
+      <div class="universe-layout">
+        <div class="universe-stage">
+          <canvas id="universe-canvas" tabindex="0" aria-label="3D catalog map. Drag to rotate, Shift-drag to pan, wheel to zoom. Click a point to select it."></canvas>
+          <div class="atlas-badge"><span id="atlas-count">Loading catalog</span><small id="atlas-legend">Color represents redshift</small></div>
+          <div class="atlas-camera"><button id="atlas-zoom-in" class="btn-outline" aria-label="Zoom in">+</button><button id="atlas-zoom-out" class="btn-outline" aria-label="Zoom out">−</button><button id="atlas-top" class="btn-outline">Top view</button></div>
+          <div class="universe-overlay">
+            <span id="universe-scale"></span>
+            <span>Drag: orbit · Shift-drag: pan · Scroll: zoom</span>
+          </div>
+        </div>
+
+        <aside class="universe-details">
+          <div class="atlas-browser"><label for="atlas-search">Find an object</label><input id="atlas-search" type="search" placeholder="Catalog name or ID" autocomplete="off"><div class="atlas-list-heading"><span id="atlas-results-count"></span><select id="atlas-sort" aria-label="Sort objects"><option value="distance">Nearest first</option><option value="name">Name / ID</option></select></div><div id="atlas-results" class="atlas-results" role="group" aria-label="Catalog objects"></div><div class="pair-buttons"><button id="atlas-prev-page" class="btn-outline">Previous</button><button id="atlas-next-page" class="btn-outline">Next</button></div><p id="atlas-browser-note" class="small muted">Choose a row to locate it. Focus brings its surroundings closer.</p></div>
+          <div class="record-head">
+            <h2 id="universe-object">Solar System origin</h2>
+          </div>
+          <dl id="universe-metadata" class="kv-list"></dl>
+          <div class="universe-actions">
+            <button id="open-object" type="button" class="btn-brass btn-trail" disabled>
+              <span>Inspect sky</span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+            </button>
+            <div class="pair-buttons">
+              <button id="focus-object" type="button" class="btn-outline" disabled>Focus</button>
+              <button id="reset-universe" type="button" class="btn-outline">Reset</button>
+            </div>
+          </div>
+          <p id="universe-selection-note" class="muted small">Real catalog positions</p>
+        </aside>
+      </div>
+
+      <div class="light-controls universe-toolbar">
+        <label id="universe-time-label" hidden>Year
+          <input id="universe-year" type="range" min="1516" max="2516" step="1" value="2016">
+          <output id="universe-year-value">2016</output>
+        </label>
+        <label class="check-label">
+          <input type="checkbox" id="universe-errors" checked> Error bars
+        </label>
+        <button id="universe-export" type="button" class="btn-outline btn-compact">Export JSON</button>
+      </div>
+
+      <details class="coverage-help universe-notes-wrap">
+        <summary>Model &amp; sources</summary>
+        <div id="universe-notes" class="comparison-note"></div>
+      </details>
+    </section>
+
+    <footer>
+      <span>SPHEREx · IRSA · Gaia · DESI</span>
+      <span>Real calibrated data</span>
+    </footer>
+  </main>
+
+  <dialog id="updates">
+    <div class="dialog-title">
+      <div>
+        <h2>Archive</h2>
+      </div>
+      <button class="close-dialog static" type="button" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="update-grid">
+      <section>
+        <h3>IRSA search</h3>
+        <p>Cache local cutouts</p>
+        <p id="collections" class="mono small"></p>
+        <a href="https://irsa.ipac.caltech.edu/Missions/spherex.html" target="_blank" rel="noreferrer">Release notes ↗</a>
+      </section>
+      <section>
+        <h3>Import FITS</h3>
+        <label>Release <input id="release-label" value="QR3" maxlength="30"></label>
+        <label class="file-label">Select FITS <input id="fits-files" type="file" accept=".fits,.fit" multiple></label>
+        <p id="import-status" role="status"></p>
+      </section>
+    </div>
+    <p id="sync-status" role="status"></p>
+    <div id="imported-list"></div>
+  </dialog>
+
+  <dialog id="context">
+    <div class="dialog-title">
+      <div>
+        <h2>Full detector</h2>
+      </div>
+      <button class="close-dialog static" type="button" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div id="context-bands" class="context-bands"></div>
+    <p id="context-note"></p>
+    <img id="context-image" alt="Full archived SPHEREx detector image">
+    <a id="context-source" target="_blank" rel="noreferrer">Original FITS ↗</a>
+  </dialog>
+  <dialog id="star-space" class="star-space"><div class="dialog-title"><div><p class="map-eyebrow">ONE STAR · OUR SOLAR SYSTEM</p><h2 id="star-space-title">Relative motion</h2></div><button id="star-space-close" class="btn-outline">Back to images ×</button></div><div class="star-space-stage"><canvas id="star-space-canvas" aria-label="Selected star and Solar System in three dimensional space. Drag to orbit and scroll to zoom." tabindex="0"></canvas><div class="star-space-hud"><span id="star-space-distance"></span><span>Drag to orbit · Scroll to zoom<br>Sphere sizes are illustrative · distances in parsecs</span></div></div><div class="star-space-controls"><button id="star-space-play" class="btn-brass">▶ Play motion</button><label>Year <output id="star-space-year-label">2016</output><input id="star-space-year" type="range" min="1516" max="2516" value="2016"></label><button id="star-space-reset" class="btn-outline">Reset view</button></div><p id="star-space-note" class="atlas-context"></p></dialog>
+</body>
+</html>
