@@ -1,6 +1,9 @@
 "use strict";
 const StarTracker = (() => {
   let result=null, choice=null, anchor2=null, awaitingAnchor2=false, version=0, timer=null, yaw=.6, pitch=.3, zoom=1;
+  // Conditions mirror tracking.py: Gaia match only for non-ephemeris, non-anchor targets (lines 516-518, 240),
+  // and xyz only when parallax/error > 20 and RUWE < 1.4 (lines 243-244); tracking.js enables the button on catalog.xyz.
+  const HELP_IDLE="Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.";
   const setText=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
   const compass=deg=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8];
 
@@ -12,14 +15,17 @@ const StarTracker = (() => {
 
   function clear() {
     version++;result=null;choice=null;anchor2=null;
+    dropCard();$("track-path").hidden=true;
     resetAnchorBtn();
     $("track-result").hidden=true;
     $("track-3d").disabled=true;
+    setText("track-help",HELP_IDLE);
     $("track-star").disabled=false;
     $("track-status").textContent="Click a star or asteroid, then track its path.";
     setText("track-kind-pill","Ready");
     setText("kpi-speed","—");setText("kpi-heading","—");setText("kpi-change","—");setText("kpi-points","—");
     draw();
+    updateLegend();
   }
 
   window.addEventListener("sky-session-ready",clear);
@@ -30,6 +36,8 @@ const StarTracker = (() => {
       $("track-status").textContent=`Anchor 2 locked (frame ${anchor2.frame+1}). Ready to track moving path.`;
       return;
     }
+    // Stepping frames re-inspects the same pixel; that must not wipe a finished track.
+    if(result&&choice&&event.detail.x===choice.x&&event.detail.y===choice.y)return;
     clear();
     choice=event.detail;
     if($("track-anchor"))$("track-anchor").disabled=false;
@@ -124,8 +132,17 @@ const StarTracker = (() => {
     const c=result.catalog, m=result.motion, ch=result.change;
     const kindLabel=result.target_kind==='asteroid'?'Asteroid':(c?'Gaia star':'Moving source');
     $("track-result").hidden=false;
+    dropCard();
+    const hasPath=result.points.some(p=>p.predicted);
+    $("track-path").hidden=!hasPath;
     $("track-3d").disabled=!c?.xyz;
+    setText("track-help",c?.xyz?"3D motion is ready for this Gaia star.":
+      result.target_kind==='asteroid'?"3D motion is unavailable: Solar System and 2-frame targets are not matched to the Gaia catalog.":
+      !c?"3D motion is unavailable: no unique Gaia DR3 match within 6.15″ of this source.":
+      "3D motion is unavailable: the Gaia parallax is too uncertain (needs parallax over 20× its error and RUWE below 1.4).");
+    if(!hasPath)setText("track-help",$("track-help").textContent+" No predicted path: this track had no catalog match, archived path or 2nd pick to predict from.");
     setText("track-kind-pill",kindLabel);
+    updateLegend();
     const wingCount=points.filter(p=>p.fit_mode==='wing').length;
     const fitNote=wingCount?` (${wingCount} wing-fit)`:'';
     $("track-status").textContent=`${points.length} / ${result.points.length} measured${fitNote}. ${c?c.name:result.catalog_note}`;
@@ -177,11 +194,23 @@ const StarTracker = (() => {
     renderChangeChart();
   }
 
+  function kinds(){
+    if(!result||result.session!==state.session?.id)return {};
+    const k={};
+    for(const p of result.points){
+      if(p.accepted)k[p.fit_mode==='wing'?'wing':'measured']=true;
+      else if(p.predicted)k.predicted=true;
+      if(p.predicted)k.path=true;
+    }
+    return k;
+  }
+
   function paint(ctx,frame,{side,left,top}){
     if(!result||result.session!==state.session?.id)return;
     const p=result.points.find(pt=>pt.index===frame.index);if(!p)return;
     const ordered=result.points.filter(v=>v.accepted).sort((a,b)=>a.mjd-b.mjd);
     ctx.save();ctx.beginPath();ctx.rect(left,top,side,side);ctx.clip();
+
 
     // Faded future/full measured trajectory
     if(ordered.length>=2){
@@ -193,6 +222,7 @@ const StarTracker = (() => {
     // Active breadcrumb path up to current frame
     const past=ordered.filter(v=>v.mjd<=p.mjd);
     const activeColor=result.target_kind==='asteroid'?'#f0c58a':'#68d391';
+    const markColor='#68d391';
     if(past.length>=1){
       ctx.strokeStyle=activeColor;ctx.lineWidth=2;ctx.beginPath();
       past.forEach((pt,idx)=>{const px=left+pt.xy[0]*side,py=top+pt.xy[1]*side;idx?ctx.lineTo(px,py):ctx.moveTo(px,py);});
@@ -203,10 +233,23 @@ const StarTracker = (() => {
       }
     }
 
+    // Predicted path (violet): hollow rings over the measured trail, so both stay visible where they coincide
+    const pred=predicted();
+    if(pred.length){
+      const at=pt=>[left+pt.predicted[0]*side,top+pt.predicted[1]*side];
+      ctx.strokeStyle='#b9a3f5';ctx.fillStyle='#b9a3f5';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+      if(pred.length>=2){ctx.beginPath();pred.forEach((pt,i)=>{const [x,y]=at(pt);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();}
+      ctx.setLineDash([]);
+      for(const pt of pred){const [x,y]=at(pt);ctx.lineWidth=pt===p?2.4:1.6;ctx.beginPath();ctx.arc(x,y,pt===p?7:5,0,Math.PI*2);ctx.stroke();}
+      const sel=pred.find(pt=>pt.index===selected);
+      if(sel){const [x,y]=at(sel);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,11,0,Math.PI*2);ctx.stroke();}
+    }
+    syncCard();
+
     const xy=p.accepted?p.xy:p.predicted;
     if(xy){
       const x=left+xy[0]*side, y=top+xy[1]*side;
-      const stroke=p.accepted?(p.fit_mode==='wing'?'#71d9f6':activeColor):'#eab354';
+      const stroke=p.accepted?(p.fit_mode==='wing'?'#71d9f6':markColor):'#b9a3f5';
       ctx.strokeStyle=stroke;ctx.lineWidth=1.8;ctx.setLineDash(p.accepted?[]:[4,4]);
       ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
 
@@ -226,12 +269,84 @@ const StarTracker = (() => {
         }
       }
 
-      ctx.font='600 12px Segoe UI';ctx.fillStyle=stroke;
-      const label=p.accepted?(p.fit_mode==='wing'?'Wing fit':'Measured'):'Predicted';
-      ctx.fillText(label,x+23,y-12);
+            const label=p.accepted?(p.fit_mode==='wing'?'Wing fit':'Measured'):'Predicted';
+      markLabel(ctx,label,x+23,y-12,stroke);
+    }else if(!p.accepted){
+      // No measurement and no prediction to mark: say why on the image itself.
+      const noteY=card&&!card.classList.contains('dot-top')?top+side-62:top+66;  // away from the info card
+      markLabel(ctx,'Not measured in this frame',left+12,noteY,'#f0806e');
+      markLabel(ctx,String(p.reason||''),left+12,noteY+16,'#f0806e');
     }
     ctx.restore();
   }
+
+  // ---- Predicted path: hit test, info card ----
+  const cur=()=>result&&result.session===state.session?.id?result:null;
+  function predicted(){return cur()?result.points.filter(p=>p.predicted).sort((a,b)=>a.mjd-b.mjd):[];}
+  function pick(px,py,{side,left,top}){
+    let best=null,bd=Infinity;
+    for(const p of predicted()){
+      const d=Math.hypot(left+p.predicted[0]*side-px,top+p.predicted[1]*side-py);
+      if(d>9)continue;
+      const score=p.index===state.index?-1:d;
+      if(score<bd){bd=score;best=p;}
+    }
+    return best;
+  }
+  // Exact inverse gnomonic (TAN) projection of the north-up, east-left image grid.
+  function skyAt([x,y]){
+    const {ra:ra0,dec:dec0,fov}=state.session.options,r=Math.PI/180;
+    const w=fov/60*r,xi=-(x-.5)*w,eta=-(y-.5)*w,rho=Math.hypot(xi,eta),c=Math.atan(rho);
+    const d0=dec0*r,dec=Math.asin(Math.cos(c)*Math.sin(d0)+(rho?eta*Math.sin(c)*Math.cos(d0)/rho:0));
+    const ra=ra0*r+Math.atan2(xi*Math.sin(c),rho*Math.cos(d0)*Math.cos(c)-eta*Math.sin(d0)*Math.sin(c));
+    return {ra:((ra/r)%360+360)%360,dec:dec/r};
+  }
+  let selected=null,card=null;
+  function dropCard(){selected=null;if(card){card.remove();card=null;}}
+  function closeCard(){dropCard();if(result)draw();}
+  function syncCard(){
+    if(card)card.querySelector('[data-go]').disabled=selected===state.index;
+  }
+  function openCard(point){
+    if(!point||!cur())return;
+    selected=point.index;
+    const f=state.session.frames[point.index],list=predicted(),i=list.indexOf(point);
+    if(!card){
+      card=document.createElement('div');card.className='path-card';card.setAttribute('role','group');card.setAttribute('aria-label','Predicted position details');
+      $('primary-pane').append(card);
+    }
+    // shortcut: corner chosen from the unzoomed dot position; recompute on pan/zoom if the card ever hides the dot
+    card.classList.toggle('dot-right',point.predicted[0]>.5);card.classList.toggle('dot-top',point.predicted[1]<.5);
+    const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
+    const head=el('div','path-card-head'),close=el('button','path-card-close','\u00d7');
+    head.append(el('h3',null,'Predicted position'),close);
+    close.type='button';close.setAttribute('aria-label','Close');close.onclick=closeCard;
+    const body=el('div','path-card-body');body.setAttribute('aria-live','polite');
+    const row=(k,v)=>{const d=el('p');d.append(el('span','k',k),document.createTextNode(v));body.append(d);};
+    body.append(el('p','path-card-time',`${dateText(f.timestamp)} ${timeText(f.timestamp)} UTC \u00b7 ${f.release}`));
+    row('Based on: ',result.catalog?`Gaia DR3 position and proper motion \u00b7 ${result.catalog.name}`:(result.catalog_note||''));
+    const s=skyAt(point.predicted);
+    row('Predicted RA / Dec: ',`${s.ra.toFixed(5)}\u00b0, ${s.dec.toFixed(5)}\u00b0`);
+    if(point.accepted){
+      row('Status: ',point.fit_mode==='wing'?'Measured (wing fit)':'Measured');
+      const as=Math.hypot(point.xy[0]-point.predicted[0],point.xy[1]-point.predicted[1])*state.session.options.fov*60;
+      row('Measured \u2212 predicted: ',`${as.toFixed(2)}\u2033 (${(as/6.15).toFixed(2)} SPHEREx px)`);
+      row('Position uncertainty: ',`\u00b1${point.error_arcsec.toFixed(2)}\u2033${Number.isFinite(point.snr)?` \u00b7 S/N ${point.snr.toFixed(1)}`:''}`);
+    }else row('Status: ',`Not measured: ${point.reason}`);
+    const acts=el('div','path-card-actions');
+    const btn=(label,fn,attr)=>{const b=el('button','btn-outline btn-compact',label);b.type='button';b.onclick=fn;if(attr)b.setAttribute(attr,'');acts.append(b);return b;};
+    btn('Earlier',()=>openCard(list[i-1])).disabled=i<=0;
+    btn('Later',()=>openCard(list[i+1])).disabled=i>=list.length-1;
+    btn('Go to this frame',()=>setFrame(point.index),'data-go');
+    card.replaceChildren(head,body,acts);
+    syncCard();draw();
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&card)closeCard();});
+  $('track-path').onclick=()=>{
+    const l=predicted();if(!l.length)return;
+    const t=(result.points.find(p=>p.index===state.index)||{}).mjd??l[0].mjd;
+    openCard(l.reduce((a,b)=>Math.abs(b.mjd-t)<Math.abs(a.mjd-t)?b:a));
+  };
   $("track-export").onclick=()=>result&&download('star-motion-track.json',JSON.stringify(result,null,2),'application/json');
   function stopSpace(){clearInterval(timer);timer=null;$("star-space-play").textContent='▶ Play motion';}
   $("track-3d").onclick=()=>{if(!result?.catalog?.xyz)return;const c=result.catalog;$("star-space-title").textContent=c.name;$("star-space-year").value=Math.round(c.epoch);$("star-space-play").disabled=!c.velocity;$("star-space-year").disabled=!c.velocity;$("star-space-note").textContent=c.velocity?'Gaia catalog trajectory: straight-line motion relative to the Solar System barycenter. This path uses catalog distance, proper motion and radial velocity, independently of the image drift. No orbital acceleration or full uncertainty propagation. The background is decorative.':'Gaia distance locates this source in space. Radial velocity is unavailable, so a complete 3D trajectory cannot be shown. The background is decorative.';yaw=-Math.atan2(c.xyz[1],c.xyz[0]);pitch=0;zoom=1;$("star-space").showModal();requestAnimationFrame(spaceDraw);};
@@ -260,6 +375,6 @@ const StarTracker = (() => {
     $("star-space-distance").textContent=`${Math.hypot(...current).toFixed(3)} pc from Solar System · ${year}`;
   }
   let drag=null;const canvas=$("star-space-canvas");canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY,yaw,pitch];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){yaw=drag[2]+(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.5,drag[3]+(e.clientY-drag[1])*.008));spaceDraw();}};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));spaceDraw();},{passive:false});new ResizeObserver(spaceDraw).observe(canvas);
-  return {paint};
+  return {paint,kinds,pick,open:openCard};
 })();
 

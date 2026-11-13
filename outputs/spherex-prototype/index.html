@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Inspect real archived SPHEREx observations, spectra, and catalog 3D distances.">
   <title>SPHEREx · Celestial Workbench</title>
-  <link rel="stylesheet" href="app.css">
-  <script src="app.js" defer></script>
-  <script src="light.js" defer></script>
-  <script src="universe.js" defer></script>
-  <script src="tracking.js" defer></script>
+  <link rel="stylesheet" href="app.css?v=7">
+  <script src="app.js?v=5" defer></script>
+  <script src="light.js?v=2" defer></script>
+  <script src="universe.js?v=2" defer></script>
+  <script src="tracking.js?v=6" defer></script>
 </head>
 <body>
   <header class="app-bar">
@@ -65,7 +65,7 @@
     <div id="observations-workspace">
       <section class="command-deck" aria-label="Target selector">
         <div class="target-strip-row">
-          <span class="deck-caption">TARGETS</span>
+          <span class="deck-caption">Targets</span>
           <nav id="fields" class="target-pills" aria-label="Saved fields"></nav>
           <button id="import-shortcut" type="button" class="btn-ghost btn-trail">
             <span>Import FITS</span>
@@ -173,12 +173,14 @@
             </div>
           </div>
 
-          <p id="target-note" class="callout-banner" hidden></p>
-          <button id="vesta-example" type="button" class="btn-ghost example-shortcut" hidden>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v3l2 1.5"/></svg>
-            <span>Load archived Vesta example · Aug 4–5</span>
-          </button>
-          <div id="vesta-guide" class="vesta-guide" hidden><strong>Vesta walkthrough</strong><span id="vesta-guide-text">The gold circle marks a suggested position in this frame.</span><button id="vesta-next-guide" type="button" class="btn-outline">Show other marked frame →</button></div>
+          <div class="vesta-callout">
+            <p id="target-note" class="callout-banner" hidden></p>
+            <button id="vesta-example" type="button" class="btn-ghost example-shortcut" hidden>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v3l2 1.5"/></svg>
+              <span>Load archived Vesta example · Aug 4–5</span>
+            </button>
+            <div id="vesta-guide" class="vesta-guide" hidden><strong>Vesta walkthrough</strong><span id="vesta-guide-text">The gold circle marks a suggested position in this frame.</span><button id="vesta-next-guide" type="button" class="btn-outline">Show other marked frame →</button></div>
+          </div>
 
           <div class="viewer-bar">
             <label class="toggle-chip"><input type="checkbox" id="markers" checked>
@@ -221,6 +223,14 @@
             </div>
           </div>
 
+          <div class="legend-strip">
+            <span id="guide-legend" class="legend-marks" aria-label="Mark legend"></span>
+            <span id="flag-legend" class="legend-item" hidden>
+              <i class="legend-swatch"></i>
+              <span>Detector artifact mask</span>
+            </span>
+          </div>
+
           <div class="tracking-bar">
             <div class="tracking-head">
               <div class="tracking-title-row">
@@ -231,10 +241,11 @@
             </div>
             <div class="tracking-actions">
               <button id="track-star" type="button" class="btn-brass">Track point</button>
-              <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false">Pick 2nd</button>
-              <button id="track-3d" type="button" class="btn-outline" disabled>3D motion</button>
+              <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false" title="Needs a clicked point first. Then step to another frame and click the moving object to anchor its path.">Pick 2nd</button>
+              <button id="track-3d" type="button" class="btn-outline" disabled title="Needs a tracked Gaia DR3 star with a reliable distance (parallax over 20 times its error, RUWE below 1.4).">3D motion</button>
               <button id="track-clear" type="button" class="btn-ghost">Clear</button>
             </div>
+            <p id="track-help" class="track-help">Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.</p>
             <div id="track-result" hidden>
               <div id="track-kpis" class="track-kpis">
                 <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong></div>
@@ -247,24 +258,16 @@
                 <svg id="track-change-plot" viewBox="0 0 400 150" role="img" aria-label="Cumulative path and interval speed over time"></svg>
               </div>
               <p id="track-summary"></p>
-              <button id="track-export" type="button" class="btn-outline btn-compact">Export JSON</button>
+              <div class="track-result-actions">
+                <button id="track-path" type="button" class="btn-outline btn-compact" hidden>Predicted path details</button>
+                <button id="track-export" type="button" class="btn-outline btn-compact">Export JSON</button>
+              </div>
               <details>
                 <summary>Method &amp; limits</summary>
                 <p>Measures native-pixel 2D Gaussian centroids (with unsaturated wing fallback on bright or saturated cores). Matches Gaia DR3 when unique, follows archived ephemerides for Solar System objects like Vesta, or uses an optional 2nd-frame anchor for custom moving objects. Click any point or speed bar to jump frames.</p>
               </details>
             </div>
           </div>
-          <div class="legend-strip">
-            <span class="legend-item">
-              <i class="legend-dot"></i>
-              <span id="guide-legend">Orange cross = patch center · blue = clicked point</span>
-            </span>
-            <span id="flag-legend" class="legend-item" hidden>
-              <i class="legend-swatch"></i>
-              <span>Detector artifact mask</span>
-            </span>
-          </div>
-
           <div class="transport">
             <button id="play" type="button" class="btn-brass" aria-pressed="false">
               <span class="play-icon-slot" aria-hidden="true">

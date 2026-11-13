@@ -1,7 +1,7 @@
 {
   "sia_endpoint": "https://irsa.ipac.caltech.edu/SIA",
   "tap_endpoint": "https://irsa.ipac.caltech.edu/TAP/sync",
-  "collections": ["spherex_qr3", "spherex_qr3_deep", "spherex_qr2", "spherex_qr2_deep"],
+  "collections": ["spherex_dr1", "spherex_qr3", "spherex_qr3_deep", "spherex_qr2", "spherex_qr2_deep"],
   "description": "Archived observations. Check IRSA for newly available releases.",
   "documentation": "https://caltech-ipac.github.io/spherex-archive-documentation/spherex-data-access/"
 }
