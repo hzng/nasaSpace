@@ -251,4 +251,12 @@ Evidence (orchestrator, live page): target switcher opens with 6 targets, pickin
 
 Known imperfections: toolbar wraps to a second row at 1280 px and with long target names; stepper buttons are 38 px tall at 390 px; tracker "Clear" wraps on phones.
 
-Git: uncommitted on `fable`. The two preview files that were swept into the earlier commit are now deleted in the working tree. Local `fable` and `origin/fable` have diverged by one commit each with identical content.
+Git (updated 2026-11-13): the redesign is committed locally as `4683c0c` (titled "Squashed commits from tracking-star", content is the redesign), not pushed. Local `fable` is 2 ahead and 1 behind `origin/fable`; the diverging pair `6eb2cb2` and `19e20f7` have identical content. Handoff written to `outputs/handofffable.md`.
+
+## Merge into `branch1` and re-host (2026-11-13, user request)
+
+- Done: `fable` merged into local `branch1` as `4bc0126` (six conflicts resolved by hand; asset versions `app.css` v10, `app.js` v7, `tracking.js` v7). Not pushed.
+- Done: hosted server replaced with the merge, run from `worktrees/branch1` on port 8765 in public mode, behind the same Cloudflare quick tunnel (URL unchanged).
+- Evidence: on a spare port, the Vesta view opened with 58 frames, no console errors; tracking "Vesta" returned a JPL Horizons result in the side panel (2 of 58 frames measured, both within tolerance; the other 56 report "Predicted position outside field of view"). Through the public URL: page 200 with `app.css?v=10`, library 6 fields, dotfile 404, foreign-origin POST 403, import 403.
+- Not checked: the result panel on phone widths; a track run through the public URL.
+- Caution: `worktrees/branch1/work` is a junction to `worktrees/fable/work`. Remove the junction with `cmd /c rmdir` before deleting that worktree.
