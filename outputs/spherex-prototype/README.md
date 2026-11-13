@@ -29,12 +29,31 @@ The workspace uses Python packages already installed in `../../work/deps/`. On a
    - Click any pixel to open the **Pixel** tab for brightness (`MJy/sr`), uncertainty, wavelength, native pixel coordinates, and flag details (including `Near (±1 px)` hints when close to a defect).
 5. **Motion Tracker (stars, asteroids, and change of movement)**:
    - **Track point**: Click any star or asteroid in the image, then press **Track point**. The tracker measures 2D Gaussian centroids across all frames, falling back to clean PSF wing fitting when bright cores are flagged or saturated.
-   - **Vesta & Solar System bodies**: For Vesta, click **Load archived Vesta example · Aug 4–5**, click the bright object inside the gold guide, and press **Track point**. The tracker matches archive ephemerides to measure its fast path (`~48.9 ″/hr`), drawing an active breadcrumb trail and forward velocity arrow.
-   - **Pick 2nd anchor**: For custom or uncataloged moving objects, click the object on Frame 1, press **Pick 2nd**, scrub to a later frame, click the object again, and press **Track point** to extrapolate velocity across all frames.
+   - **Solar System objects (JPL Horizons)**: Type a designation in **Solar System object** (`Vesta`, `4`, `Ceres`, `433 Eros`) and press **Track point**; no click is needed. The predicted position at every exposure comes from JPL Horizons and is drawn as a dashed purple track. The measured centroid, the offset in arcseconds and a disagreement flag are shown next to it. For Vesta, click **Load archived Vesta example · Aug 4–5** first; the name is prefilled. See *Moving objects and JPL Horizons* below.
+   - **Pick 2nd anchor**: Only for objects that have no designation. Click the object on Frame 1, press **Pick 2nd**, scrub to a later frame, click the object again, and press **Track point**. This is a straight-line guide from two clicks, not an ephemeris, and the result says so. It is never used when a designation is typed.
    - **Change of movement**: The tracker computes step-by-step velocity, heading (`PA°`), cumulative displacement, and quadratic acceleration/turning (`Steady motion`, `Speeding up`, `Slowing down`, or `Curving path`), displayed in big bold KPI cards and two interactive plots (`#track-plot` sky path and `#track-change-plot` speed/displacement over time).
    - **3D motion**: For stars with Gaia DR3 distance and radial velocity (such as Barnard’s Star), click **3D motion** to launch an interactive 3D trajectory view from year 1516 to 2516 relative to the Solar System.
    - Click **Export JSON** to export measured positions, fit modes, velocities, and kinematics.
 6. **Coverage policy**: Aligned playback requires at least **99%** geometric detector footprint coverage inside the requested square and at least **80%** finite valid pixels. Partial exposures are excluded from playback and listed below the timeline with their original FITS links and reasons.
+
+#### Moving objects and JPL Horizons
+
+- **Source**: `ephemeris.py` queries the [JPL Horizons API](https://ssd-api.jpl.nasa.gov/doc/horizons.html) with plain `requests`. It asks for astrometric ICRF RA/Dec (light-time corrected), the apparent rate, distance and light time. Positions are never interpolated, extrapolated or estimated from the image.
+- **Observer**: the SPHEREx spacecraft itself, Horizons center `500@-163182` ("SPHEREx (spacecraft)", trajectory from concatenated two-line elements, 2025-Mar-12 to about 30 days ahead). Checked on 2026-11-12: Horizons' geocentric position of the spacecraft agrees with the `X_SC/Y_SC/Z_SC` values in two FITS headers to about 2 km. If Horizons has no SPHEREx trajectory for a date, the whole request falls back to the geocenter and the UI shows a warning; parallax from the orbit is then missing (about 1″ for main-belt asteroids, arcminutes for near-Earth objects).
+- **Time**: each exposure is asked at its midpoint, FITS `MJD-AVG` (UTC, converted if `TIMESYS` says otherwise), sent to Horizons as JD UT. The frame timestamp shown elsewhere in the app is the exposure start.
+- **Cache and offline use**: every response is stored in `../../work/prototype-cache/horizons/`, one JSON file per object and observer, keyed by epoch. `fixtures/horizons/` ships real Horizons output for the Vesta and Ceres examples, so they work with no network. A cached row is reused without asking Horizons again; the UI shows its retrieval date and the word "cached". Delete the cache file to refresh.
+- **Failures are shown, not hidden**: unknown object, ambiguous name (the matching records are listed), no ephemeris for the date, or Horizons unreachable with exposure times missing from the cache. The tracker then stops with that message. It does not fall back to an approximation.
+- **Agreement rule**: an offset is flagged when it exceeds `max(3 × centroid error, 3.1″)` (3.1″ is half a native pixel). This is a display rule, not a calibrated astrometric error model. Frames with no usable centroid are counted separately and are never reported as agreeing.
+- **Examples and measured offsets** (2026-11-13, measured centroid minus Horizons position, all wing fits on saturated cores):
+
+  | Object | View to load | Frames | Median | Max | Flagged |
+  |---|---|---|---|---|---|
+  | 4 Vesta | RA `223.015`, Dec `-11.99`, 30′, D3, 2025-08-04 to 2025-08-05 | 3 | 0.75″ | 3.33″ | 0 |
+  | 4 Vesta | same view, D6 | 3 | 2.55″ | 3.28″ | 1 |
+  | 1 Ceres | RA `13.82`, Dec `-5.763`, 30′, D1, 2025-06-24 | 7 | 2.70″ | 4.79″ | 1 |
+
+  Measured against predicted speed: Vesta 48.92 against 48.92 ″/hr, Ceres 34.04 against 34.06 ″/hr. For one and the same Vesta exposure the offset differs by up to 2.8″ between D3 and D6 although the prediction is identical, so at least that much comes from the centroid side (wing fits on a saturated core), not from the ephemeris. The bundled Vesta example (15′, D3) holds 2 of these exposures and gives 0.90″ and 2.21″; the other frames and all Ceres frames live in the local cache (`../../work/prototype-cache/`) and are not in git.
+- **Limits**: the centroid is searched within 3 pixels of the predicted position, so a background star that sits there can be measured instead of the object; agreement over several frames of a moving track is the evidence, not a single frame. A request that mixes dates with and without a SPHEREx trajectory is computed geocentrically as a whole. Comets with several orbit records need the record number typed.
 
 ### 2. Measure the light (spectra, light curves & candidate screening)
 

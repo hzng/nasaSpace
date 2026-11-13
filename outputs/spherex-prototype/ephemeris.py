@@ -4,8 +4,11 @@ from pathlib import Path
 import json
 import os
 import re
+import threading
 
 import requests
+
+_LOCK = threading.Lock()
 
 URL = 'https://ssd.jpl.nasa.gov/api/horizons.api'
 OBSERVERS = ['500@-163182', '500@399']  # SPHEREx spacecraft, then geocenter fallback
@@ -62,14 +65,23 @@ def _parse(text, command, keys):
 
 
 def fetch(designation, jd_utc_list, cache_dir):
+    with _LOCK:  # several tracking jobs share one cache file: serialise its read-merge-write
+        return _fetch(designation, jd_utc_list, cache_dir)
+
+
+def _fetch(designation, jd_utc_list, cache_dir):
     command = designation.strip()
+    if not re.fullmatch(r'[A-Za-z0-9 /.()\-]+;?', command):  # also keeps quotes out of the Horizons command
+        raise EphemerisError('"%s" is not a valid object designation.' % command)
     command += '' if command.endswith(';') else ';'
     keys = ['%.9f' % jd for jd in jd_utc_list]
     requested = False
     for observer in OBSERVERS:
         fname = re.sub(r'[^a-z0-9]+', '_', (command + '_' + observer).lower()).strip('_') + '.json'
         cpath = Path(cache_dir) / 'horizons' / fname
-        fixture, cache = _load(Path(__file__).parent / 'fixtures' / 'horizons' / fname), _load(cpath)
+        # file names drop punctuation, so a file only counts when it was written for this exact command
+        fixture, cache = (d if d.get('command', command).lower() == command.lower() else {}
+                          for d in (_load(Path(__file__).parent / 'fixtures' / 'horizons' / fname), _load(cpath)))
         doc = {**fixture, **cache, 'rows': {**fixture.get('rows', {}), **cache.get('rows', {})}}
         missing = list(dict.fromkeys(k for k in keys if k not in doc['rows']))
         for i in range(0, len(missing), 50):
@@ -86,7 +98,10 @@ def fetch(designation, jd_utc_list, cache_dir):
             requested = True
             doc.update(object=parsed[0], observer=parsed[1], observer_code=observer, command=command)
             stamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-            for k, row in zip(chunk, parsed[2]):
+            for k in chunk:  # Horizons sorts rows by time, not request order: match on the returned JD
+                row = min(parsed[2], key=lambda r: abs(float(r[1]) - float(k)))
+                if abs(float(row[1]) - float(k)) > 1e-8:
+                    raise EphemerisError('Horizons did not return the requested exposure time JD %s.' % k)
                 doc['rows'][k] = dict(zip(FIELDS, map(float, row[4:11])), retrieved_utc=stamp)
             cpath.parent.mkdir(parents=True, exist_ok=True)
             tmp = cpath.with_name(cpath.name + '.tmp')
@@ -109,7 +124,9 @@ if __name__ == '__main__':
     assert abs(r['rows'][0]['ra'] - 222.866226866) < 1e-6 and abs(r['rows'][0]['dec'] + 11.907544792) < 1e-6, r['rows'][0]
     assert r['observer_code'] == '500@-163182' and not r['warnings'] and r['object'].startswith('4 Vesta'), r
     assert fetch('Vesta', jds, tmp)['from_cache'] is True
-    for name, want in (('Notarealrock', 'Notarealrock'), ('Halley', 'Record')):
+    a, b = fetch('Ceres', jds, tempfile.mkdtemp())['rows'], fetch('Ceres', jds[::-1], tempfile.mkdtemp())['rows']
+    assert a[0]['ra'] == b[1]['ra'] != a[1]['ra'] == b[0]['ra'], (a, b)  # a descending request keeps each epoch's row
+    for name, want in (('Notarealrock', 'Notarealrock'), ('Halley', 'Record'), ('Vesta!', 'not a valid')):
         try:
             fetch(name, jds, tmp)
             raise AssertionError(name)

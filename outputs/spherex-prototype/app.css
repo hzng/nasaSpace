@@ -1759,6 +1759,7 @@ details code {
 .track-warnings {margin:0 0 4px;padding-left:18px;font-size:12px;color:var(--accent)}
 .track-warnings:empty {display:none}
 .tracking-bar .track-flag {padding:6px 10px;border-radius:8px;border:1px solid var(--positive);font-weight:700;color:var(--positive)}
+.tracking-bar .track-flag.partial {border-color:var(--line-strong);color:var(--text)}
 .tracking-bar .track-flag.bad {border-color:var(--danger);background:rgba(240,128,110,.12);color:var(--danger)}
 .tracking-bar p.track-error {color:var(--danger);font-weight:600;white-space:pre-line}
 @media (max-width: 720px) {.track-kpis{grid-template-columns:1fr 1fr}.track-charts{grid-template-columns:1fr}}

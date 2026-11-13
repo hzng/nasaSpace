@@ -5,7 +5,8 @@ const StarTracker = (() => {
   const PRED='#c9a0ff', BAD='#f0806e';
   let typedObject=false;
   const prefillObject=()=>{if(!typedObject)$("track-object").value=state.field==='vesta'?'Vesta':'';};
-  $("track-object").addEventListener('input',()=>{typedObject=true;});
+  // Editing the object invalidates a running request, so its answer is never shown under the new name
+  $("track-object").addEventListener('input',()=>{typedObject=true;version++;if($("track-star").disabled){$("track-star").disabled=false;$("track-status").textContent="Object changed. Press Track point to run again.";}});
   const compass=deg=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8];
 
   const fmtSpeed=m=>m.preferred_unit==='hr'?`${m.speed_arcsec_per_hr.toFixed(1)} ″/hr`:`${m.speed_arcsec_per_year.toFixed(2)} ″/yr`;
@@ -58,6 +59,8 @@ const StarTracker = (() => {
     const obj=$("track-object").value.trim();
     if(!choice&&!obj){$("track-status").textContent="Click a star or moving object in the image first, or type a Solar System object.";return;}
     const token=++version;$("track-star").disabled=true;$("track-status").classList.remove("track-error");
+    // Drop the previous result first: a failed rerun must not leave an earlier success on screen
+    result=null;$("track-result").hidden=true;$("track-3d").disabled=true;draw();
     try{
       const body={session:state.session.id,frame:choice?choice.frame:state.index};
       if(choice){body.x=choice.x;body.y=choice.y;}
@@ -135,7 +138,7 @@ const StarTracker = (() => {
     const r=p.rate_arcsec_per_hr;
     return `\nJPL predicted RA ${f(p.predicted_sky[0],5)}° Dec ${f(p.predicted_sky[1],5)}°`
       +(p.offset_arcsec!=null?`\nOffset (measured − predicted) ${f(p.offset_arcsec)}″ (E ${f(p.offset_east_arcsec)}″, N ${f(p.offset_north_arcsec)}″), tolerance ${f(p.tolerance_arcsec)}″${p.within_tolerance===false?' · OUTSIDE TOLERANCE':''}`:'')
-      +(r?`\nRate ${f(r[0],2)}″/hr RA·cosDec, ${f(r[1],2)}″/hr Dec (instantaneous, includes spacecraft orbital parallax)`:'')
+      +(r?`\nRate ${f(r[0],2)}″/hr RA·cosDec, ${f(r[1],2)}″/hr Dec (apparent-coordinate rate at that instant; includes the spacecraft's orbital motion, so it is not the speed between exposures)`:'')
       +`\nDistance ${f(p.delta_au,3)} au · light time ${f(p.light_time_min)} min`;
   }
   function renderEphemeris(e){
@@ -150,9 +153,13 @@ const StarTracker = (() => {
       setText("track-offset",`No frame could be compared with a measurement; ${rule}`);
       flag.className='track-flag bad';flag.textContent='Prediction shown, not confirmed: no measured position to check it against.';
     }else{
-      setText("track-offset",`Offset median ${f(e.offset_median_arcsec)}″ · max ${f(e.offset_max_arcsec)}″ over ${e.compared} frames · ${rule}`);
-      flag.className='track-flag'+(e.flagged?' bad':'');
-      flag.textContent=e.flagged?`⚠ ${e.flagged} of ${e.compared} frames disagree with the ephemeris beyond tolerance`:`All ${e.compared} compared frames agree with the ephemeris within tolerance`;
+      const total=result.points.length, missing=total-e.compared;
+      const rest=missing?` · ${missing} of ${total} frames have no usable measurement, so the prediction is unconfirmed there`:'';
+      setText("track-offset",`Offset median ${f(e.offset_median_arcsec)}″ · max ${f(e.offset_max_arcsec)}″ over ${e.compared} of ${total} frames · ${rule}`);
+      flag.className='track-flag'+(e.flagged?' bad':missing?' partial':'');
+      flag.textContent=e.flagged?`⚠ ${e.flagged} of ${e.compared} compared frames disagree with the ephemeris beyond tolerance${rest}`
+        :missing?`${e.compared} of ${total} frames compared, all within tolerance${rest}`
+        :`All ${total} frames agree with the ephemeris within tolerance`;
     }
   }
 
@@ -190,8 +197,10 @@ const StarTracker = (() => {
     const gaiaMsg=c?.velocity?'Gaia 3D trajectory ready.':c?.xyz?'Gaia 3D position ready (no RV).':'';
     $("track-summary").textContent=driftMsg+chMsg+gaiaMsg;
 
-    const svg=$("track-plot");svg.replaceChildren();if(!points.length)return;
+    const svg=$("track-plot");svg.replaceChildren();
     const preds=eph?result.points.filter(p=>p.predicted_east_arcsec!=null).sort((a,b)=>a.mjd-b.mjd):[];
+    // With no centroid at all the predicted path is still drawn, and the change chart never keeps an older result
+    if(!points.length&&!preds.length){renderChangeChart();return;}
     const span=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec),...preds.map(p=>Math.max(Math.abs(p.predicted_east_arcsec),Math.abs(p.predicted_north_arcsec))));
     const scale=64/span, ox=200, oy=82;
     svgEl(svg,'path',{d:'M60 82H340 M200 12V152',stroke:'#384150'});

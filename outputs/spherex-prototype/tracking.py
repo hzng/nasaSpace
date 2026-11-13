@@ -452,7 +452,9 @@ def track(manifest, paths, payload, cache, progress):
         for i, frame in enumerate(frames):
             try:
                 with fits.open(paths[i], memmap=True) as h:
-                    mids.append(float(h['IMAGE'].header['MJD-AVG']))
+                    mid, scale = float(h['IMAGE'].header['MJD-AVG']), str(h['IMAGE'].header.get('TIMESYS', 'UTC')).strip().lower()
+                # Horizons is asked in UT; a header in another time scale is converted, not assumed
+                mids.append(mid if scale == 'utc' else float(Time(mid, format='mjd', scale=scale).utc.mjd))
             except KeyError:
                 mids.append(float(frame['mjd']))
                 n_start += 1
@@ -602,11 +604,13 @@ def track(manifest, paths, payload, cache, progress):
                     item.update(accepted=False, reason=str(e))
                 points[i] = item
 
-    motion, segments, change = _kinematics(points, ref, reference['mjd'])
+    # Ephemeris mode: measured and predicted motion share the exposure midpoints and the accepted frames
+    motion, segments, change = (_kinematics([dict(p, mjd=p['mjd_mid']) for p in points], ref, mids[index]) if eph is not None
+                                else _kinematics(points, ref, reference['mjd']))
     limitations = DEFAULT_LIMITATIONS
     if eph is not None:
         offs = [p['offset_arcsec'] for p in points if 'offset_arcsec' in p]
-        pp = [dict(accepted=True, index=p['index'], timestamp=p['timestamp'], mjd=p['mjd_mid'], error_arcsec=0.3,  # _kinematics floor; predictions carry no centroid error
+        pp = [dict(accepted=p['accepted'], index=p['index'], timestamp=p['timestamp'], mjd=p['mjd_mid'], error_arcsec=0.3,  # _kinematics floor; predictions carry no centroid error
                    east_arcsec=p['predicted_east_arcsec'], north_arcsec=p['predicted_north_arcsec'])
               for p in points if 'mjd_mid' in p]
         pm, _, pc = _kinematics(pp, ref, mids[index])

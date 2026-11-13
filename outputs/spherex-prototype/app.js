@@ -169,7 +169,7 @@ function setFrame(index) {
   $("context-button").hidden = !frame.context.length;
   $("provenance").textContent = frame.provenance;
   $("checksum").textContent = `SHA-256 ${frame.sha256}`;
-  $("guide-legend").textContent = frame.marker ? "Archived Vesta guide · position unverified" : "Orange cross = patch center · blue = clicked point";
+  $("guide-legend").textContent = frame.marker ? "Gold circle = archived IRSA guide · Track point shows the JPL Horizons position" : "Orange cross = patch center · blue = clicked point";
   if (state.field === "vesta" && $("vesta-guide") && !$("vesta-guide").hidden) {
     const marked = state.session.frames.map((item,i)=>item.marker?i:-1).filter(i=>i>=0);
     $("vesta-guide-text").textContent = frame.marker
@@ -245,7 +245,7 @@ function sessionReady(session, request) {
   $("vesta-guide").hidden = state.field !== "vesta" || vestaMarked.length < 2;
   if (state.field === "vesta") {
     $("target-note").hidden = false;
-    $("target-note").textContent = "Vesta asteroid · orange cross = center · click Track point on a marked frame";
+    $("target-note").textContent = "Vesta asteroid · orange cross = center · press Track point to compare with JPL Horizons";
   } else if (state.objectContext) {
     const obj = state.objectContext;
     $("target-note").hidden = false;

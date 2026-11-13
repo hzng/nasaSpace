@@ -6,6 +6,10 @@
 4. Inspect the small offset plot and export JSON for all positions, rejected-frame reasons, fit diagnostics, original FITS hashes and catalog provenance.
 5. If there is a unique Gaia association with a sufficiently reliable distance, **Star + Solar System** opens a separate two-object scene. Drag to orbit, scroll to zoom, and change the year or play motion when radial velocity is available.
 
+## Solar System objects
+
+When a designation is typed in **Solar System object**, the expected position on every frame comes from JPL Horizons (observer: the SPHEREx spacecraft, epoch: exposure midpoint in UTC), not from Gaia and not from a fit through earlier positions. The image centroid stays an independent measurement and the offset between the two is reported per frame. Source, observer check, cache, failure messages, tolerance and measured offsets are described in `README.md` under *Moving objects and JPL Horizons*.
+
 ## Measurement scope
 
 Each native image is independently fitted with a circular Gaussian plus constant background, using variance weights. The fit searches within two native pixels of the expected location. The source core must be free of specified contamination flags; weak fits (amplitude S/N below 5), reduced chi-square above 10, broad fits and fits at a search boundary are rejected. Bright saturated sources may therefore have only catalog prediction rings. The display uncertainty includes a conservative 0.5-arcsecond floor, not an instrument-wide calibrated error model.
