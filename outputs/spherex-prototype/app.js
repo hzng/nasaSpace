@@ -7,11 +7,15 @@ const state = { library: null, session: null, index: 0, reference: 0, mode: "sin
   requestVersion: 0, pending: null, views: new Map() };
 const hues = ["#b798f4", "#84b3ef", "#a5edcc", "#ebdf82", "#eec083", "#efac99"];
 const dateText = timestamp => new Date(timestamp).toISOString().slice(0, 10);
+const timeText = timestamp => new Date(timestamp).toISOString().slice(11, 16);
 const numberText = (value, digits=3) => value == null ? "Unavailable" : Number(value).toFixed(digits);
 
 async function api(path, options={}) {
   const response = await fetch(path, options);
-  const data = await response.json();
+  // A tunnel or proxy answers with an HTML error page while the server is down.
+  const data = await response.json().catch(() => {
+    throw new Error("The server did not answer. It may be restarting. Try again in a moment.");
+  });
   if (!response.ok) throw new Error(data.error || "The request failed.");
   return data;
 }
@@ -53,13 +57,72 @@ function transform(canvas) {
     top: (rect.height-side)/2 + state.panY*rect.height, width: rect.width, height: rect.height };
 }
 
-function drawGuide(ctx, x, y, color, circle=false) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.4;
+function markLabel(ctx, text, x, y, color) {
+  ctx.save();
+  ctx.font = "600 12px Segoe UI";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = "rgba(10,11,14,.9)";
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawCenter(ctx, x, y) {
+  ctx.save();
+  ctx.globalAlpha = .8; ctx.strokeStyle = "#d9d4c8"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x-8,y); ctx.lineTo(x+8,y); ctx.moveTo(x,y-8); ctx.lineTo(x,y+8); ctx.stroke();
+  ctx.restore();
+}
+
+function drawGuide(ctx, x, y) {
+  ctx.strokeStyle = "#eab354"; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(x,y,13,0,2*Math.PI); ctx.stroke();
+  markLabel(ctx, "Guide", x+17, y+22, "#eab354");  // below the circle: tracker labels sit above it
+}
+
+function drawClick(ctx, x, y) {
+  ctx.strokeStyle = "#6cb8ff"; ctx.lineWidth = 1.6;
   ctx.beginPath();
-  if (circle) ctx.arc(x,y,13,0,2*Math.PI);
-  else { ctx.moveTo(x-9,y); ctx.lineTo(x+9,y); ctx.moveTo(x,y-9); ctx.lineTo(x,y+9); }
+  for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { ctx.moveTo(x+dx*4,y+dy*4); ctx.lineTo(x+dx*11,y+dy*11); }
   ctx.stroke();
+}
+
+const legendGlyphs = {
+  center: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M4 11h14M11 4v14" stroke="#d9d4c8" stroke-opacity=".8" stroke-width="1" fill="none"/></svg>',
+  click: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M11 3v5M11 14v5M3 11h5M14 11h5" stroke="#6cb8ff" stroke-width="1.6" fill="none"/></svg>',
+  guide: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="#eab354" stroke-width="1.6" fill="none"/></svg>',
+  measured: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="#68d391" stroke-width="1.8" fill="none"/></svg>',
+  wing: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="#71d9f6" stroke-width="1.8" fill="none"/></svg>',
+  predicted: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="#b9a3f5" stroke-width="1.8" stroke-dasharray="3.5 3" fill="none"/></svg>',
+  path: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M2 15L20 7" stroke="#b9a3f5" stroke-width="1.4" stroke-dasharray="3.5 2.5" fill="none"/><circle cx="6" cy="13.3" r="2.2" fill="#b9a3f5"/><circle cx="16" cy="8.9" r="2.2" fill="#b9a3f5"/></svg>',
+};
+
+// One legend for every mark; shows only what is currently drawn.
+function updateLegend() {
+  const box = $("guide-legend");
+  if (!box) return;
+  const frame = state.session?.frames?.[state.index];
+  const items = [];
+  if (frame && $("markers").checked) {
+    items.push(["center","Field center"]);
+    if (frame.marker) items.push(["guide","Vesta guide (archived, not measured)"]);
+  }
+  if (frame && state.point) items.push(["click","Clicked pixel"]);
+  const kinds = frame && typeof StarTracker !== "undefined" ? StarTracker.kinds() : {};
+  if (kinds.measured) items.push(["measured","Measured"]);
+  if (kinds.wing) items.push(["wing","Wing fit"]);
+  if (kinds.predicted) items.push(["predicted","Predicted (catalog or ephemeris)"]);
+  if (kinds.path) items.push(["path","Predicted path \u00b7 click a dot for details"]);
+  box.replaceChildren(...items.map(([key,label]) => {
+    const item = document.createElement("span");
+    item.className = "legend-item";
+    item.innerHTML = legendGlyphs[key];
+    item.append(label);
+    return item;
+  }));
+  box.hidden = !items.length;
 }
 
 async function paint(canvas, frame, version) {
@@ -85,10 +148,10 @@ async function paint(canvas, frame, version) {
   }
   if (mask) ctx.drawImage(mask,left,top,side,side);
   if ($("markers").checked) {
-    const marker = frame.marker || [.5,.5];
-    drawGuide(ctx,left+marker[0]*side,top+marker[1]*side,"#eab354",Boolean(frame.marker));
+    drawCenter(ctx,left+.5*side,top+.5*side);
+    if (frame.marker) drawGuide(ctx,left+frame.marker[0]*side,top+frame.marker[1]*side);
   }
-  if (state.point) drawGuide(ctx,left+state.point.x*side,top+state.point.y*side,"#6cb8ff");
+  if (state.point) drawClick(ctx,left+state.point.x*side,top+state.point.y*side);
   if (typeof StarTracker !== "undefined") StarTracker.paint(ctx, frame, {side,left,top});
 }
 
@@ -138,6 +201,7 @@ function setFrame(index) {
   const frame = state.session.frames[index];
   $("timeline").value = index;
   $("timeline").setAttribute("aria-valuetext", dateText(frame.timestamp));
+  if ($("frame-counter")) $("frame-counter").textContent = `Frame ${index+1} / ${state.session.frames.length}`;
   $("observation-date").textContent = new Date(frame.timestamp).toLocaleDateString("en",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
   $("observation-time").textContent = `${frame.timestamp.slice(11,19)} UTC`;
   entryList($("metadata"), [
@@ -169,12 +233,12 @@ function setFrame(index) {
   $("context-button").hidden = !frame.context.length;
   $("provenance").textContent = frame.provenance;
   $("checksum").textContent = `SHA-256 ${frame.sha256}`;
-  $("guide-legend").textContent = frame.marker ? "Gold circle = archived IRSA guide · Track point shows the JPL Horizons position" : "Orange cross = patch center · blue = clicked point";
+  updateLegend();
   if (state.field === "vesta" && $("vesta-guide") && !$("vesta-guide").hidden) {
     const marked = state.session.frames.map((item,i)=>item.marker?i:-1).filter(i=>i>=0);
     $("vesta-guide-text").textContent = frame.marker
       ? `Frame ${index+1}: the gold circle is a suggested Vesta location on ${dateText(frame.timestamp)}. Switch to the other marked frame to see it shift. This is a guide, not a measured detection.`
-      : `Frame ${index+1} has no Vesta guide. The gold cross is only the field center. Use “Show other marked frame” for the two-frame example.`;
+      : `Frame ${index+1} has no Vesta guide. The ivory cross is only the field center. Use “Show other marked frame” for the two-frame example.`;
     $("vesta-next-guide").disabled = marked.length < 2;
   }
   $("scale-label").textContent = `${state.session.options.fov}′ FOV`;
@@ -182,6 +246,23 @@ function setFrame(index) {
   renderComparison();
   draw();
   if (state.point) inspect(state.point, index);
+}
+
+// Toolbar target switcher (absent on older pages: every lookup is guarded).
+function syncSwitcher() {
+  if (!$("switcher-name")) return;
+  const field = state.library?.fields?.find(item => item.key === state.field);
+  const count = field ? field.frames : state.session?.frames?.length;
+  $("switcher-name").textContent = field ? field.name : state.title;
+  $("switcher-count").textContent = count == null ? "" : `${count} obs`;
+  $("switcher-thumb").hidden = !field?.thumbnail;
+  if (field?.thumbnail) $("switcher-thumb").src = field.thumbnail;
+  $("switcher-icon").toggleAttribute("hidden", Boolean(field?.thumbnail));  // SVG has no .hidden property
+}
+
+function closeTargets() {
+  const popover = $("target-popover");
+  if (popover?.matches?.(":popover-open")) popover.hidePopover();
 }
 
 function resetView() {
@@ -210,6 +291,7 @@ function sessionReady(session, request) {
   $("pixel-result").replaceChildren();
   $("field-title").textContent = state.title;
   $("field-type").textContent = `${session.options.ra.toFixed(4)}°, ${session.options.dec.toFixed(4)}°`;
+  syncSwitcher();
   $("timeline").max = Math.max(0, session.frames.length-1);
   $("filmstrip").replaceChildren();
   $("reference-date").replaceChildren();
@@ -219,10 +301,13 @@ function sessionReady(session, request) {
     button.dataset.index = index;
     button.setAttribute("aria-label",`Open observation ${dateText(frame.timestamp)}`);
     const img = document.createElement("img"); img.src = frame.preview; img.alt = ""; img.loading = "lazy";
-    const caption = document.createElement("span"); caption.textContent = `${dateText(frame.timestamp)} · ${frame.release}`;
+    const caption = document.createElement("span"); caption.className = "frame-copy";
+    for (const text of [dateText(frame.timestamp), `${timeText(frame.timestamp)} UTC · ${frame.release}`]) {
+      const line = document.createElement("span"); line.textContent = text; caption.append(line);
+    }
     button.append(img,caption); button.onclick = () => { stop(); setFrame(index); };
     $("filmstrip").append(button);
-    const option = new Option(dateText(frame.timestamp),index);
+    const option = new Option(`${dateText(frame.timestamp)} ${timeText(frame.timestamp)} · ${frame.release}`,index);
     $("reference-date").append(option);
   });
   $("reference-date").value = state.reference;
@@ -245,7 +330,7 @@ function sessionReady(session, request) {
   $("vesta-guide").hidden = state.field !== "vesta" || vestaMarked.length < 2;
   if (state.field === "vesta") {
     $("target-note").hidden = false;
-    $("target-note").textContent = "Vesta asteroid · orange cross = center · press Track point to compare with JPL Horizons";
+    $("target-note").textContent = "Vesta asteroid · ivory cross = center · press Track point to compare with JPL Horizons";
   } else if (state.objectContext) {
     const obj = state.objectContext;
     $("target-note").hidden = false;
@@ -270,9 +355,10 @@ function sessionReady(session, request) {
     for (const id of ["sky","reference"]) { const canvas=$(id); canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height); }
     $("metadata").replaceChildren(); $("quality-card").replaceChildren();
     $("observation-date").textContent = "No frames"; $("observation-time").textContent = "";
+    if ($("frame-counter")) $("frame-counter").textContent = "Frame 0 / 0";
     $("baseline").textContent = "0 frames"; $("comparison-note").textContent = session.empty_reason || "No matches";
     $("frame-caption").textContent = ""; $("reference-caption").textContent = ""; $("scale-label").textContent = "";
-    $("guide-legend").textContent = "Orange cross = patch center · blue = clicked point";
+    updateLegend();
     $("fits-link").removeAttribute("href"); $("source-link").hidden = true; $("context-button").hidden = true;
     $("provenance").textContent = ""; $("checksum").textContent = "";
   }
@@ -297,6 +383,28 @@ function requestIdentity(request) {
   return JSON.stringify(request.options);
 }
 
+function loadingMessage(label) {
+  const box = $("view-message");
+  let text = box.querySelector("span"), bar = box.querySelector(".load-progress");
+  if (!text) { box.replaceChildren(); text = document.createElement("span"); box.append(text); bar = null; }
+  text.textContent = label;
+  const match = /(\d+)\s+of\s+(\d+)/.exec(label);
+  if (!match || Number(match[2]) <= 0) { bar?.remove(); return; }
+  const total = Number(match[2]), now = Math.min(Number(match[1]), total);
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "load-progress";
+    bar.setAttribute("role","progressbar");
+    bar.setAttribute("aria-label","Loading progress");
+    bar.setAttribute("aria-valuemin","0");
+    bar.append(document.createElement("i"));
+    box.append(bar);
+  }
+  bar.setAttribute("aria-valuemax",String(total));
+  bar.setAttribute("aria-valuenow",String(now));
+  bar.firstChild.style.width = `${(now/total*100).toFixed(1)}%`;
+}
+
 async function search(source="saved") {
   const request = {options: inputs(), source, field: state.field, title: state.title, version: ++state.requestVersion};
   state.pending = request;
@@ -314,6 +422,7 @@ async function search(source="saved") {
     try {
       const key = requestIdentity(current);
       let result = current.source === "saved" ? state.views.get(key) : null;
+      let fetched = false;
       if (!result) {
         const job = await api("/api/jobs", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...current.options,source:current.source})});
         while (true) {
@@ -323,16 +432,21 @@ async function search(source="saved") {
           if (current.version === state.requestVersion) {
             const label = progress.stage || `Loading ${current.options.fov}′ D${current.options.detector}`;
             status(label, "busy");
-            $("view-message").textContent = label;
+            loadingMessage(label);
           }
           await new Promise(resolve => setTimeout(resolve,350));
         }
         state.views.set(key,result);
+        fetched = true;
       }
       if (current.version === state.requestVersion) {
         state.loading = false;
         $("viewers").setAttribute("aria-busy","false");
         sessionReady(result,current);
+        // A view that had to be fetched comes into focus; revisited views switch instantly.
+        const stage = $("viewers");
+        stage.classList.remove("resolve");
+        if (fetched) { void stage.offsetWidth; stage.classList.add("resolve"); }
       }
     } catch(error) {
       if (current.version === state.requestVersion) {
@@ -360,6 +474,8 @@ function chooseField(field) {
   // Preserve the chosen width and detector while switching targets.
   $("start").value = ""; $("end").value = "";
   for (const button of $("fields").children) button.setAttribute("aria-current",String(button.dataset.key === field.key));
+  closeTargets();
+  syncSwitcher();
   search();
 }
 
@@ -502,6 +618,8 @@ for (const id of ["sky","reference"]) {
         const x = (event.clientX - rect.left - view.left) / view.side;
         const y = (event.clientY - rect.top - view.top) / view.side;
         updateHoverFlag(id, x, y);
+        if (id === "sky" && typeof StarTracker !== "undefined")
+          canvas.style.cursor = StarTracker.pick(event.clientX-rect.left, event.clientY-rect.top, view) ? "pointer" : "";
       }
       return;
     }
@@ -521,9 +639,12 @@ for (const id of ["sky","reference"]) {
       const view = transform(canvas);
       const x = (event.clientX-rect.left-view.left)/view.side;
       const y = (event.clientY-rect.top-view.top)/view.side;
-      if (x>=0 && x<1 && y>=0 && y<1) {
+      const hit = id === "sky" && typeof StarTracker !== "undefined"
+        ? StarTracker.pick(event.clientX-rect.left, event.clientY-rect.top, view) : null;
+      if (hit) StarTracker.open(hit);
+      else if (x>=0 && x<1 && y>=0 && y<1) {
         stop(); state.point = {x,y}; selectTab("pixel");
-        inspect(state.point,id === "sky" ? state.index : state.reference); draw();
+        inspect(state.point,id === "sky" ? state.index : state.reference); draw(); updateLegend();
       }
     }
     drag = null;
@@ -594,6 +715,7 @@ async function library() {
     meta.append(title,description); copy.append(categoryBadge(field.category),meta); button.append(img,copy); button.onclick = () => chooseField(field);
     $("fields").append(button);
   }
+  syncSwitcher();
   const sync = data.sync;
   $("sync-status").textContent = sync ? `${sync.status} · ${sync.completed}/${sync.total} synced` : "Local cache";
   $("imported-list").replaceChildren();
@@ -675,6 +797,7 @@ for (const mode of ["single","split"]) $("mode-"+mode).onclick = () => {
 };
 for (const id of ["markers","quality","tint"]) $(id).onchange = () => {
   if ($("flag-legend")) $("flag-legend").hidden = !$("quality").checked;
+  if (id === "markers") updateLegend();
   if ($("hover-flag-badge") && !$("quality").checked) $("hover-flag-badge").hidden = true;
   if (id === "quality") {
     const label = $("quality-card")?.querySelector?.("span");
@@ -685,7 +808,13 @@ for (const id of ["markers","quality","tint"]) $(id).onchange = () => {
 $("zoom").oninput = () => { state.zoom = Number($("zoom").value); $("zoom-value").textContent = state.zoom.toFixed(1)+"×"; draw(); };
 $("reset-view").onclick = resetView;
 for (const tab of ["observation","pixel"]) $("tab-"+tab).onclick = () => selectTab(tab);
-for (const id of ["updates-button","import-shortcut"]) $(id).onclick = async () => { $("updates").showModal(); try { await library(); } catch(error) { status(error.message,"error"); } };
+// The popover lives in the top layer; pin it under its button each time it opens.
+$("target-popover")?.addEventListener("beforetoggle", event => {
+  if (event.newState !== "open") return;
+  const rect = $("target-switcher").getBoundingClientRect();
+  Object.assign(event.target.style, {top: `${rect.bottom + 6}px`, left: `${rect.left}px`});
+});
+for (const id of ["updates-button","import-shortcut"]) $(id).onclick = async () => { closeTargets(); $("updates").showModal(); try { await library(); } catch(error) { status(error.message,"error"); } };
 for (const button of document.querySelectorAll(".close-dialog")) button.onclick = () => button.closest("dialog").close();
 $("context-button").onclick = contextView;
 $("share").onclick = async () => {

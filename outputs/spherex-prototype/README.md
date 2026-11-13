@@ -14,7 +14,9 @@ python -X utf8 server.py
 
 The default port is `8765`. If that port is already occupied, run `python -X utf8 server.py --port 8766` and open `http://127.0.0.1:8766/`.
 
-The workspace uses Python packages already installed in `../../work/deps/`. On a fresh machine, install dependencies from `requirements.txt` (including `photutils>=3`). Keep the sibling `../spherex-viewer/data/` directory alongside `spherex-prototype/` under `outputs/`, as it supplies the initial featured field definitions and demonstration FITS cutouts.
+Use Python 3.12 to 3.14. Python 3.15 is not supported yet: the packages have no complete set of binary wheels for it (PyYAML is missing). On this machine a Python 3.14 environment was created with `uv venv --python 3.14 ..\..\work\venv`, and the packages are in `..\..\work\deps`. The launchers use `..\..\work\venv` when it exists, otherwise `python`. On a fresh machine, install dependencies from `requirements.txt` (including `photutils>=3`). Keep the sibling `../spherex-viewer/data/` directory alongside `spherex-prototype/` under `outputs/`, as it supplies the six bundled example fields and FITS cutouts.
+
+The six bundled example fields work with no network. To load the full list of other observations, copy `.env.example` to `.env` in this folder and fill in `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the Supabase secret or service-role key). `.env` is ignored by git. The key is used only by the local Python server and scripts and is never sent to the browser. Real environment variables take precedence over `.env`. At start, the server downloads the observation index from Supabase when credentials are set. If Supabase is unreachable or not configured, it uses the local copy. With neither, the app runs on the six bundled examples only.
 
 ## Workspace guide
 
@@ -77,19 +79,18 @@ The workspace uses Python packages already installed in `../../work/deps/`. On a
 ## Release status & archive refresh
 
 - **Currently public SPHEREx spectral-image releases** (verified November 11, 2026 against IRSA and `nasa-irsa-spherex` S3): **QR3** (DOI `10.26131/IRSA662`, first released September 2026) and **QR2** (DOI `10.26131/IRSA652`, headers updated April 10, 2026). **QR1** was retired in February 2026.
-- **Planned DR1 status**: Checked on November 11, 2026 — `https://irsa.ipac.caltech.edu/data/SPHEREx/docs/overview_dr1.html` returned HTTP 404 and the AWS S3 `dr1/` prefix did not exist (`qr2/` and `qr3/` only). Do not assume DR1 files are live from schedule dates alone; verify at IRSA before adding a DR1 collection to `archive-config.json`.
+- **DR1 file paths**: The archive returned DR1 file paths on 2026-11-12. On that date the IRSA archive query returned Level-2 files under `dr1` paths, and a DR1 cutout downloaded and passed the app's file checks. `archive-config.json` now lists `spherex_dr1` first.
+
+### Storage: what is local and what is in Supabase
+
+- **Bundled locally**: the six example fields (22 FITS frames, about 191 MB) in `../spherex-viewer/data/`. They work with no network.
+- **Observation index in Supabase**: the list of all other observations is `featured-library.json`: 4,256 observations across the six fields (2,941 from release DR1 and 1,315 from QR3, observed 2025-04-24 to 2026-10-02). `sync_featured.py` builds it from six NASA IRSA archive footprint queries. The script downloads no image files. It stores the index in the private Supabase Storage bucket `spherex` and keeps a local copy in `../../work/prototype-cache/`.
+- **Image pixels come from IRSA when needed**: opening a sky view downloads only the cutouts that view needs, sized to the view. Measuring light downloads 5-arcminute cutouts around the chosen point. The first open of a view needs the network and is slower; reopening it uses the cache. Measured example: a 10-arcminute Vesta view fetched 60 cutouts (about 4 MB each) in 72 to 155 seconds, and reopened in 2 seconds.
+- **Cache cap**: after each job the server trims `../../work/prototype-cache/` to a size cap set by the environment variable `SPHEREX_CACHE_GB` (default `2`). Downloaded cutouts are deleted first (oldest first), then older rendered views. The most recently opened view, user-imported FITS files, the index, saved measurements and calibration files are never deleted. Calibration files (about 330 MB after one measurement) are outside the cap. An evicted cutout is downloaded again automatically when a pixel is inspected or a source is tracked.
+- **Refresh the index**: run `Update featured data.cmd`, or execute `python -X utf8 sync_featured.py`. This only refreshes the index and uploads it. It does not download image files or pre-render views. `prepare_featured.py` still exists, but it would download and render every view, so it is not part of the normal workflow.
 
 ### Refreshing cached observations, calibrations, and catalogs
 
-All large FITS cutouts, rendered sessions, calibrations, and extracted spectra are stored outside the deliverable directory in `../../work/prototype-cache/` (requiring multiple gigabytes of disk space; downloads automatically pause if less than 5 GB free space remains):
-
-- **Refresh featured sky fields (4,227 archive records across 6 targets & 180 detector/width views)**:
-  Run `Update featured data.cmd`, or execute:
-  ```powershell
-  python -X utf8 sync_featured.py --workers 8
-  python -X utf8 prepare_featured.py
-  ```
-  Existing verified FITS downloads and prepared manifests are reused automatically. Note that `sync_featured.py` downloads 90-arcminute padded source cutouts so rotated 60-arcminute views can be aligned without small-box cropping.
 - **Refresh science calibrations (30 files: QR2/QR3 `spectral_wcs`, QR2/QR3 `solid_angle_pixel_map`, QR3 `epsf`)**:
   ```powershell
   python -X utf8 calibrations.py
@@ -109,6 +110,11 @@ All large FITS cutouts, rendered sessions, calibrations, and extracted spectra a
 - **Time-separated wavelengths**: Different wavelengths at a fixed sky position are frequently observed on different dates. Intrinsic source variability or object motion across epochs can imitate spectral slopes or dips.
 - **Candidate screening is not identification**: Absorption feature cards (`H2O`, `CH4`, `CH3OH`, `CO2`, `CO`) test a local linear continuum against reference wavelength windows using clean, same-detector, same-release points within 14 days, requiring `>= 5σ` depth including a conservative `5%` continuum error floor. This score is neither a statistical identification probability nor a composition percentage, and does not distinguish gas vs. ice or source vs. foreground absorption.
 - **Catalog completeness**: `galaxies.json` and `stars.json` are quality-filtered samples (`10,000` galaxies, `5,000` stars within 200 pc), not volume-complete maps. Empty sky regions reflect survey footprints and selection cuts. DESI distance errors propagate formal redshift error only (no peculiar velocities or cosmological model uncertainty); Gaia distances apply no parallax zero-point correction.
+- **Calibration releases**: "Measure light" has calibration support for QR2 and QR3 only. DR1 observations are listed as rejected with the reason "No validated science calibration adapter for this release".
+- **Custom positions**: for a custom position that is not a saved field center, only observations whose archive footprint contains that position are fetched. Partly overlapping observations are not listed as excluded.
+- **Vesta guide markers**: guide markers for non-bundled Vesta frames need the file `work/results.tbl`, which is not included.
+- **Evicted cutouts**: the "FITS" download link of a cutout that was evicted from the cache returns 404 until the view is opened again.
+- **Cutout fallback**: if the archive's cutout service fails for one file, the app falls back to downloading the full detector file (about 65 MB). The cache trim can remove that file later.
 
 ## Scientific & archive references
 

@@ -69,7 +69,7 @@ def query(config, ra, dec, radius=.001, start=None, end=None):
         for row in table:
             uri = str(row['access_uri'])
             identity = re.search(r'level2_(.+)D([1-6])_spx_', uri)
-            release = re.search(r'/spherex/(qr\d+)/', uri)
+            release = re.search(r'/spherex/((?:qr|dr)\d+)/', uri)
             version = re.search(r'l2b-v(\d+)-(\d{4})-(\d{3})', uri)
             if not identity or not release or not uri.endswith('.fits'):
                 continue

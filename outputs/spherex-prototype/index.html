@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Inspect real archived SPHEREx observations, spectra, and catalog 3D distances.">
   <title>SPHEREx · Celestial Workbench</title>
-  <link rel="stylesheet" href="app.css">
-  <script src="app.js" defer></script>
-  <script src="light.js" defer></script>
-  <script src="universe.js" defer></script>
-  <script src="tracking.js" defer></script>
+  <link rel="stylesheet" href="app.css?v=10">
+  <script src="app.js?v=7" defer></script>
+  <script src="light.js?v=2" defer></script>
+  <script src="universe.js?v=2" defer></script>
+  <script src="tracking.js?v=7" defer></script>
 </head>
 <body>
   <header class="app-bar">
@@ -63,62 +63,76 @@
 
   <main class="shell">
     <div id="observations-workspace">
-      <section class="command-deck" aria-label="Target selector">
-        <div class="target-strip-row">
-          <span class="deck-caption">TARGETS</span>
-          <nav id="fields" class="target-pills" aria-label="Saved fields"></nav>
-          <button id="import-shortcut" type="button" class="btn-ghost btn-trail">
-            <span>Import FITS</span>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V3.5M4.5 7L8 3.5 11.5 7M3 13.5h10"/></svg>
+      <div class="toolbar">
+        <div class="target-switch">
+          <button id="target-switcher" type="button" class="switcher" popovertarget="target-popover" aria-haspopup="true" aria-controls="target-popover">
+            <span class="sr-only">Change target. Current target: </span>
+            <img id="switcher-thumb" alt="" hidden>
+            <svg id="switcher-icon" class="switcher-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>
+            <span class="switcher-copy">
+              <strong id="switcher-name">Vesta</strong>
+              <small id="switcher-count"></small>
+            </span>
+            <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
           </button>
+          <div id="target-popover" class="target-popover" popover>
+            <span class="popover-caption">Targets</span>
+            <nav id="fields" class="target-list" aria-label="Saved fields"></nav>
+            <button id="import-shortcut" type="button" class="btn-ghost btn-trail">
+              <span>Import FITS</span>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V3.5M4.5 7L8 3.5 11.5 7M3 13.5h10"/></svg>
+            </button>
+          </div>
         </div>
 
         <form id="search-form" class="query-strip" aria-label="Sky search">
-          <label class="input-group" title="Right ascension (ICRS): decimal degrees or hh:mm:ss">
-            <span>RA</span>
-            <input id="ra" value="222.9452745" required aria-describedby="coordinate-help" placeholder="deg or h:m:s">
-          </label>
-          <label class="input-group" title="Declination (ICRS): decimal degrees or ±dd:mm:ss">
-            <span>Dec</span>
-            <input id="dec" value="-11.9498975" required placeholder="deg or d:m:s">
-          </label>
+          <div class="query-fields">
+            <label class="input-group coord-field" title="Right ascension (ICRS): decimal degrees or hh:mm:ss">
+              <span>RA</span>
+              <input id="ra" value="222.9452745" required aria-describedby="coordinate-help" placeholder="deg or h:m:s">
+            </label>
+            <label class="input-group coord-field" title="Declination (ICRS): decimal degrees or ±dd:mm:ss">
+              <span>Dec</span>
+              <input id="dec" value="-11.9498975" required placeholder="deg or d:m:s">
+            </label>
 
-          <div class="input-group">
-            <label for="fov">Width</label>
-            <div class="stepper">
-              <button type="button" id="fov-prev" class="static" aria-label="Previous field width">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
-              </button>
-              <select id="fov">
-                <option value="5">5 arcmin</option>
-                <option value="10">10 arcmin</option>
-                <option value="15" selected>15 arcmin</option>
-                <option value="30">30 arcmin</option>
-                <option value="60">60 arcmin</option>
-              </select>
-              <button type="button" id="fov-next" class="static" aria-label="Next field width">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
-              </button>
+            <div class="input-group">
+              <label for="fov">Width</label>
+              <div class="stepper">
+                <button type="button" id="fov-prev" class="static" aria-label="Previous field width">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
+                </button>
+                <select id="fov">
+                  <option value="5">5 arcmin</option>
+                  <option value="10">10 arcmin</option>
+                  <option value="15" selected>15 arcmin</option>
+                  <option value="30">30 arcmin</option>
+                  <option value="60">60 arcmin</option>
+                </select>
+                <button type="button" id="fov-next" class="static" aria-label="Next field width">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div class="input-group">
-            <label for="detector">Band</label>
-            <div class="stepper">
-              <button type="button" id="detector-prev" class="static" aria-label="Previous detector">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
-              </button>
-              <select id="detector">
-                <option value="1">D1 · 0.75–1.09 µm</option>
-                <option value="2">D2 · 1.10–1.62 µm</option>
-                <option value="3" selected>D3 · 1.63–2.41 µm</option>
-                <option value="4">D4 · 2.42–3.82 µm</option>
-                <option value="5">D5 · 3.83–4.41 µm</option>
-                <option value="6">D6 · 4.42–5.00 µm</option>
-              </select>
-              <button type="button" id="detector-next" class="static" aria-label="Next detector">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
-              </button>
+            <div class="input-group">
+              <label for="detector">Band</label>
+              <div class="stepper">
+                <button type="button" id="detector-prev" class="static" aria-label="Previous detector">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
+                </button>
+                <select id="detector">
+                  <option value="1">D1 · 0.75–1.09 µm</option>
+                  <option value="2">D2 · 1.10–1.62 µm</option>
+                  <option value="3" selected>D3 · 1.63–2.41 µm</option>
+                  <option value="4">D4 · 2.42–3.82 µm</option>
+                  <option value="5">D5 · 3.83–4.41 µm</option>
+                  <option value="6">D6 · 4.42–5.00 µm</option>
+                </select>
+                <button type="button" id="detector-next" class="static" aria-label="Next detector">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -133,33 +147,35 @@
             </button>
           </div>
 
-          <details class="query-disclosure">
-            <summary>
-              <span class="summary-label">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>
-                <span>Date filter</span>
-              </span>
-              <span id="source-state">UTC · Auto</span>
-            </summary>
-            <div class="date-filter">
-              <span id="coordinate-help">Deg or h:m:s</span>
-              <label>From <input type="date" id="start"></label>
-              <label>To <input type="date" id="end"></label>
-            </div>
-          </details>
+          <div class="query-meta">
+            <div id="status" role="status" aria-live="polite" class="status">Ready</div>
+            <details class="query-disclosure">
+              <summary>
+                <span class="summary-label">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>
+                  <span>Date filter</span>
+                </span>
+                <span id="source-state">UTC · Auto</span>
+              </summary>
+              <div class="date-filter">
+                <span id="coordinate-help">Deg or h:m:s</span>
+                <label>From <input type="date" id="start"></label>
+                <label>To <input type="date" id="end"></label>
+              </div>
+            </details>
+          </div>
         </form>
-      </section>
-
-      <div id="status" role="status" aria-live="polite" class="status">Ready</div>
+      </div>
 
       <div class="workbench">
-        <section class="surface-card stage-pane" aria-labelledby="field-title">
-          <div class="card-header">
-            <div class="target-title-block">
-              <h1 id="field-title">Vesta</h1>
-              <p class="coord-sub" id="field-type"></p>
-            </div>
-            <div class="stage-header-actions">
+        <section class="stage" aria-labelledby="field-title">
+          <div class="stage-title sr-only">
+            <h1 id="field-title">Vesta</h1>
+            <p class="coord-sub" id="field-type"></p>
+          </div>
+
+          <div class="hero">
+            <div class="viewer-bar hero-float" role="group" aria-label="View controls">
               <div class="segmented" aria-label="View mode">
                 <button id="mode-single" type="button" class="static" aria-pressed="true" title="Single frame view">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/></svg>
@@ -170,154 +186,194 @@
                   <span>Compare</span>
                 </button>
               </div>
+              <span class="float-divider" aria-hidden="true"></span>
+              <label class="toggle-chip"><input type="checkbox" id="markers" checked>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>
+                <span>Guides</span>
+              </label>
+              <label class="toggle-chip"><input type="checkbox" id="quality">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2l5.5 2.5v3.8c0 3.3-2.3 5.5-5.5 6.2-3.2-.7-5.5-2.9-5.5-6.2V4.5L8 2z"/></svg>
+                <span>Flags</span>
+              </label>
+              <label class="toggle-chip"><input type="checkbox" id="tint">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="6.2" cy="8" r="3.5"/><circle cx="9.8" cy="8" r="3.5"/></svg>
+                <span>Tint</span>
+              </label>
+              <span class="float-divider" aria-hidden="true"></span>
+              <label class="zoom-control" title="Zoom sky viewport">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg>
+                <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
+                <output id="zoom-value">1.0×</output>
+              </label>
+              <button id="reset-view" type="button" class="btn-ghost" title="Reset pan and zoom">Reset</button>
+            </div>
+
+            <div id="viewers" class="viewers" aria-busy="false">
+              <div id="view-message" class="view-message" hidden role="status"></div>
+              <div class="image-pane" id="primary-pane">
+                <canvas id="sky" tabindex="0" aria-label="Aligned sky image. Click to inspect a pixel, drag to pan, or use the zoom control."></canvas>
+                <span class="hud-badge hud-bl" id="frame-caption">Loading</span>
+                <span class="hud-badge hud-tl compass" aria-label="Orientation North up, East left">
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M13 13V4.5M10.8 6.7L13 4.5l2.2 2.2M13 13H4.5M6.7 10.8L4.5 13l2.2 2.2"/></svg>
+                  <span>N↑ E←</span>
+                </span>
+                <span class="hud-badge hud-br" id="scale-label"></span>
+                <span class="hud-badge hover-flag-badge" id="hover-flag-badge" hidden></span>
+              </div>
+              <div class="image-pane" id="reference-pane" hidden>
+                <canvas id="reference" tabindex="0" aria-label="Reference sky image"></canvas>
+                <span class="hud-badge hud-bl" id="reference-caption"></span>
+                <span class="hud-badge hud-tl compass">N↑ E←</span>
+              </div>
+            </div>
+
+            <div class="transport hero-float" role="group" aria-label="Playback">
+              <button id="play" type="button" class="btn-brass" aria-pressed="false">
+                <span class="play-icon-slot" aria-hidden="true">
+                  <svg class="icon-play" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.8 3.2v9.6l8-4.8z"/></svg>
+                  <svg class="icon-pause" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="3.8" y="3.2" width="3" height="9.6" rx="0.9"/><rect x="9.2" y="3.2" width="3" height="9.6" rx="0.9"/></svg>
+                </span>
+                <span id="play-label">Play</span>
+              </button>
+              <button id="previous" type="button" class="btn-ghost icon-btn" aria-label="Previous frame">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5v9M12.5 3.5L7 8l5.5 4.5"/></svg>
+              </button>
+              <input id="timeline" type="range" min="0" max="0" value="0" step="1" aria-label="Observation frame">
+              <button id="next" type="button" class="btn-ghost icon-btn" aria-label="Next frame">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 3.5v9M3.5 3.5L9 8l-5.5 4.5"/></svg>
+              </button>
+              <span id="frame-counter" class="frame-counter">Frame 0 / 0</span>
+              <select id="speed" aria-label="Playback interval">
+                <option value="1400">0.7 fps</option>
+                <option value="800" selected>1.2 fps</option>
+                <option value="350">3.0 fps</option>
+              </select>
             </div>
           </div>
 
-          <p id="target-note" class="callout-banner" hidden></p>
-          <button id="vesta-example" type="button" class="btn-ghost example-shortcut" hidden>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v3l2 1.5"/></svg>
-            <span>Load archived Vesta example · Aug 4–5</span>
-          </button>
-          <div id="vesta-guide" class="vesta-guide" hidden><strong>Vesta walkthrough</strong><span id="vesta-guide-text">The gold circle marks a suggested position in this frame.</span><button id="vesta-next-guide" type="button" class="btn-outline">Show other marked frame →</button></div>
-
-          <div class="viewer-bar">
-            <label class="toggle-chip"><input type="checkbox" id="markers" checked>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>
-              <span>Guides</span>
-            </label>
-            <label class="toggle-chip"><input type="checkbox" id="quality">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2l5.5 2.5v3.8c0 3.3-2.3 5.5-5.5 6.2-3.2-.7-5.5-2.9-5.5-6.2V4.5L8 2z"/></svg>
-              <span>Flags</span>
-            </label>
-            <label class="toggle-chip"><input type="checkbox" id="tint">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="6.2" cy="8" r="3.5"/><circle cx="9.8" cy="8" r="3.5"/></svg>
-              <span>Tint</span>
-            </label>
-
-            <label class="zoom-control" title="Zoom sky viewport">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg>
-              <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
-              <output id="zoom-value">1.0×</output>
-            </label>
-            <button id="reset-view" type="button" class="btn-ghost" title="Reset pan and zoom">Reset</button>
-          </div>
-
-          <div id="viewers" class="viewers" aria-busy="false">
-            <div id="view-message" class="view-message" hidden role="status"></div>
-            <div class="image-pane" id="primary-pane">
-              <canvas id="sky" tabindex="0" aria-label="Aligned sky image. Click to inspect a pixel, drag to pan, or use the zoom control."></canvas>
-              <span class="hud-badge hud-bl" id="frame-caption">Loading</span>
-              <span class="hud-badge hud-tl compass" aria-label="Orientation North up, East left">
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M13 13V4.5M10.8 6.7L13 4.5l2.2 2.2M13 13H4.5M6.7 10.8L4.5 13l2.2 2.2"/></svg>
-                <span>N↑ E←</span>
-              </span>
-              <span class="hud-badge hud-br" id="scale-label"></span>
-              <span class="hud-badge hover-flag-badge" id="hover-flag-badge" hidden></span>
-            </div>
-            <div class="image-pane" id="reference-pane" hidden>
-              <canvas id="reference" tabindex="0" aria-label="Reference sky image"></canvas>
-              <span class="hud-badge hud-bl" id="reference-caption"></span>
-              <span class="hud-badge hud-tl compass">N↑ E←</span>
-            </div>
-          </div>
-
-          <div class="tracking-bar">
-            <div class="tracking-head">
-              <div class="tracking-title-row">
-                <strong>Motion tracker</strong>
-                <span id="track-kind-pill" class="track-kind-pill">Ready</span>
-              </div>
-              <p id="track-status" role="status">Click a star or asteroid, then track its path.</p>
-            </div>
-            <label class="track-object" for="track-object">Solar System object (optional, uses JPL Horizons)
-              <input id="track-object" type="text" placeholder="Vesta, 4, 433 Eros" autocomplete="off" spellcheck="false">
-            </label>
-            <div class="tracking-actions">
-              <button id="track-star" type="button" class="btn-brass">Track point</button>
-              <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false">Pick 2nd</button>
-              <button id="track-3d" type="button" class="btn-outline" disabled>3D motion</button>
-              <button id="track-clear" type="button" class="btn-ghost">Clear</button>
-            </div>
-            <div id="track-result" hidden>
-              <div id="track-eph" class="track-eph" hidden>
-                <p id="track-source" class="track-source"></p>
-                <p id="track-timescale"></p>
-                <ul id="track-warnings" class="track-warnings"></ul>
-                <p id="track-offset"></p>
-                <p id="track-flag" class="track-flag" role="alert" hidden></p>
-              </div>
-              <div id="track-kpis" class="track-kpis">
-                <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong><small id="kpi-speed-pred"></small></div>
-                <div class="track-kpi"><span>Heading</span><strong id="kpi-heading">—</strong><small id="kpi-heading-pred"></small></div>
-                <div class="track-kpi"><span>Change</span><strong id="kpi-change">—</strong></div>
-                <div class="track-kpi"><span>Measured</span><strong id="kpi-points">—</strong></div>
-              </div>
-              <div class="track-charts">
-                <svg id="track-plot" viewBox="0 0 400 180" role="img" aria-label="Measured sky trajectory relative to the reference observation"></svg>
-                <svg id="track-change-plot" viewBox="0 0 400 150" role="img" aria-label="Cumulative path and interval speed over time"></svg>
-              </div>
-              <p id="track-summary"></p>
-              <button id="track-export" type="button" class="btn-outline btn-compact">Export JSON</button>
-              <details>
-                <summary>Method &amp; limits</summary>
-                <p>Measures native-pixel 2D Gaussian centroids (with unsaturated wing fallback on bright or saturated cores). Matches Gaia DR3 when unique, follows archived ephemerides for Solar System objects like Vesta, or uses an optional 2nd-frame anchor for custom moving objects. Click any point or speed bar to jump frames.</p>
-              </details>
-            </div>
-          </div>
           <div class="legend-strip">
-            <span class="legend-item">
-              <i class="legend-dot"></i>
-              <span id="guide-legend">Orange cross = patch center · blue = clicked point</span>
-            </span>
+            <span id="guide-legend" class="legend-marks" aria-label="Mark legend"></span>
             <span id="flag-legend" class="legend-item" hidden>
               <i class="legend-swatch"></i>
               <span>Detector artifact mask</span>
             </span>
           </div>
 
-          <div class="transport">
-            <button id="play" type="button" class="btn-brass" aria-pressed="false">
-              <span class="play-icon-slot" aria-hidden="true">
-                <svg class="icon-play" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.8 3.2v9.6l8-4.8z"/></svg>
-                <svg class="icon-pause" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="3.8" y="3.2" width="3" height="9.6" rx="0.9"/><rect x="9.2" y="3.2" width="3" height="9.6" rx="0.9"/></svg>
-              </span>
-              <span id="play-label">Play</span>
-            </button>
-            <button id="previous" type="button" class="btn-outline icon-btn" aria-label="Previous frame">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5v9M12.5 3.5L7 8l5.5 4.5"/></svg>
-            </button>
-            <input id="timeline" type="range" min="0" max="0" value="0" step="1" aria-label="Observation frame">
-            <button id="next" type="button" class="btn-outline icon-btn" aria-label="Next frame">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 3.5v9M3.5 3.5L9 8l-5.5 4.5"/></svg>
-            </button>
-            <select id="speed" aria-label="Playback interval">
-              <option value="1400">0.7 fps</option>
-              <option value="800" selected>1.2 fps</option>
-              <option value="350">3.0 fps</option>
-            </select>
+          <div class="frames-block">
+            <div class="timeline-heading">
+              <span id="baseline">TIMELINE</span>
+              <label>Compare <select id="reference-date"></select></label>
+            </div>
+            <div class="filmstrip" id="filmstrip"></div>
           </div>
 
-          <div class="timeline-heading">
-            <span id="baseline">TIMELINE</span>
-            <label>Compare <select id="reference-date"></select></label>
+          <div class="stage-notes">
+            <p class="comparison-note" id="comparison-note">ICRS grid</p>
+
+            <details id="excluded-observations" class="excluded-observations" hidden>
+              <summary id="excluded-summary"></summary>
+              <div id="excluded-list"></div>
+            </details>
+
+            <details class="coverage-help">
+              <summary>Coverage policy</summary>
+              <p>Each aligned view uses a padded archive cutout on one ICRS sky grid. Playback requires ≥99% footprint coverage and ≥80% valid unmasked pixels. Brightness also depends on wavelength, background, and flags.</p>
+            </details>
           </div>
 
-          <div class="filmstrip" id="filmstrip"></div>
-          <div class="comparison-note" id="comparison-note">ICRS grid</div>
+          <section id="light-panel" class="light-panel" aria-labelledby="light-title">
+            <div class="light-head">
+              <div class="target-title-block">
+                <h2 id="light-title" class="section-title">Spectrum</h2>
+                <p id="light-position" class="coord-sub">Center default</p>
+              </div>
+              <button id="measure-light" type="button" class="btn-brass btn-trail">
+                <span>Measure</span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h2.5l2-5 3 7 2-3.5H14"/></svg>
+              </button>
+            </div>
 
-          <details id="excluded-observations" class="excluded-observations" hidden>
-            <summary id="excluded-summary"></summary>
-            <div id="excluded-list"></div>
-          </details>
+            <div class="light-controls">
+              <label>Window
+                <select id="light-scope">
+                  <option value="near">±7 days</option>
+                  <option value="dates">Viewer dates</option>
+                  <option value="all">All dates</option>
+                </select>
+              </label>
+              <label title="Reference redshift z">z
+                <input id="light-redshift" type="number" value="0" min="0" max="5" step="0.001">
+              </label>
+              <label class="check-label">
+                <input type="checkbox" id="light-review" checked> Flagged
+              </label>
+              <button id="light-center" type="button" class="btn-outline btn-compact">Center</button>
+            </div>
 
-          <details class="coverage-help">
-            <summary>Coverage policy</summary>
-            <p>Each aligned view uses a padded archive cutout on one ICRS sky grid. Playback requires ≥99% footprint coverage and ≥80% valid unmasked pixels. Brightness also depends on wavelength, background, and flags.</p>
-          </details>
+            <p id="light-status" class="light-status" role="status">Ready</p>
+
+            <div id="light-result" hidden>
+              <div class="light-controls plot-toolbar">
+                <div class="segmented">
+                  <button id="plot-spectrum" type="button" class="static" aria-pressed="true">Spectrum</button>
+                  <button id="plot-time" type="button" class="static" aria-pressed="false">Time</button>
+                </div>
+                <label>Release
+                  <select id="light-release">
+                    <option value="all">All</option>
+                    <option value="QR3">QR3</option>
+                    <option value="QR2">QR2</option>
+                  </select>
+                </label>
+                <label id="time-wave-label" hidden>µm
+                  <input id="time-wave" type="number" value="2" min="0.75" max="5" step="0.01">
+                </label>
+                <label id="time-tolerance-label" hidden>±
+                  <input id="time-tolerance" type="number" value="0.05" min="0.005" max="0.5" step="0.005">
+                </label>
+                <div class="export-pills">
+                  <button id="light-csv" type="button" class="btn-outline btn-compact">CSV</button>
+                  <button id="light-json" type="button" class="btn-outline btn-compact">JSON</button>
+                  <button id="light-svg" type="button" class="btn-outline btn-compact">SVG</button>
+                </div>
+              </div>
+
+              <div class="plot-wrap">
+                <svg id="light-chart" viewBox="0 0 1000 390" role="img" aria-label="Measured light with error bars"></svg>
+              </div>
+              <p id="plot-note" class="plot-note"></p>
+
+              <div class="candidate-heading">
+                <h3>Dip checks</h3>
+              </div>
+              <div id="chemical-candidates" class="chemical-candidates"></div>
+
+              <details class="coverage-help">
+                <summary>Method &amp; refs</summary>
+                <p>Forced ePSF fit calibrated using official spectral WCS and pixel solid-angle maps without deblending. Simplified ≥5σ local-continuum checks (releases separate, ≤14d groups) — screening indicators only. Redshift z shifts rest wavelengths.</p>
+                <div id="light-sources"></div>
+              </details>
+
+              <details class="coverage-help">
+                <summary>Records</summary>
+                <div id="measurement-table" class="measurement-table"></div>
+                <button id="more-measurements" type="button" class="btn-ghost">Show more</button>
+              </details>
+            </div>
+          </section>
         </section>
 
-        <div class="science-stack">
-          <aside class="surface-card inspector-card" aria-label="Observation and pixel inspector">
+        <aside class="inspector" aria-label="Details">
+          <div class="vesta-callout inspector-section">
+            <p id="target-note" class="callout-banner" hidden></p>
+            <button id="vesta-example" type="button" class="btn-ghost example-shortcut" hidden>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v3l2 1.5"/></svg>
+              <span>Load archived Vesta example · Aug 4–5</span>
+            </button>
+            <div id="vesta-guide" class="vesta-guide" hidden><strong>Vesta walkthrough</strong><span id="vesta-guide-text">The gold circle marks a suggested position in this frame.</span><button id="vesta-next-guide" type="button" class="btn-outline btn-compact">Show other marked frame →</button></div>
+          </div>
+
+          <section class="inspector-section inspector-card" aria-label="Observation and pixel inspector">
             <div class="inspector-top">
               <div class="tabs" role="tablist">
                 <button id="tab-observation" type="button" role="tab" class="static" aria-selected="true">Observation</button>
@@ -377,89 +433,57 @@
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11L11 5M6 5h5v5"/></svg>
               </a>
             </div>
-          </aside>
-
-          <section id="light-panel" class="surface-card light-panel" aria-labelledby="light-title">
-            <div class="card-header">
-              <div class="target-title-block">
-                <h2 id="light-title">Spectrum</h2>
-                <p id="light-position" class="coord-sub">Center default</p>
-              </div>
-              <button id="measure-light" type="button" class="btn-brass btn-trail">
-                <span>Measure</span>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h2.5l2-5 3 7 2-3.5H14"/></svg>
-              </button>
-            </div>
-
-            <div class="light-controls">
-              <label>Window
-                <select id="light-scope">
-                  <option value="near">±7 days</option>
-                  <option value="dates">Viewer dates</option>
-                  <option value="all">All dates</option>
-                </select>
-              </label>
-              <label title="Reference redshift z">z
-                <input id="light-redshift" type="number" value="0" min="0" max="5" step="0.001">
-              </label>
-              <label class="check-label">
-                <input type="checkbox" id="light-review" checked> Flagged
-              </label>
-              <button id="light-center" type="button" class="btn-outline btn-compact">Center</button>
-            </div>
-
-            <p id="light-status" class="comparison-note" role="status">Ready</p>
-
-            <div id="light-result" hidden>
-              <div class="light-controls plot-toolbar">
-                <div class="segmented">
-                  <button id="plot-spectrum" type="button" class="static" aria-pressed="true">Spectrum</button>
-                  <button id="plot-time" type="button" class="static" aria-pressed="false">Time</button>
-                </div>
-                <label>Release
-                  <select id="light-release">
-                    <option value="all">All</option>
-                    <option value="QR3">QR3</option>
-                    <option value="QR2">QR2</option>
-                  </select>
-                </label>
-                <label id="time-wave-label" hidden>µm
-                  <input id="time-wave" type="number" value="2" min="0.75" max="5" step="0.01">
-                </label>
-                <label id="time-tolerance-label" hidden>±
-                  <input id="time-tolerance" type="number" value="0.05" min="0.005" max="0.5" step="0.005">
-                </label>
-                <div class="export-pills">
-                  <button id="light-csv" type="button" class="btn-outline btn-compact">CSV</button>
-                  <button id="light-json" type="button" class="btn-outline btn-compact">JSON</button>
-                  <button id="light-svg" type="button" class="btn-outline btn-compact">SVG</button>
-                </div>
-              </div>
-
-              <div class="plot-wrap">
-                <svg id="light-chart" viewBox="0 0 1000 390" role="img" aria-label="Measured light with error bars"></svg>
-              </div>
-              <p id="plot-note" class="plot-note"></p>
-
-              <div class="candidate-heading">
-                <h3>Dip checks</h3>
-              </div>
-              <div id="chemical-candidates" class="chemical-candidates"></div>
-
-              <details class="coverage-help">
-                <summary>Method &amp; refs</summary>
-                <p>Forced ePSF fit calibrated using official spectral WCS and pixel solid-angle maps without deblending. Simplified ≥5σ local-continuum checks (releases separate, ≤14d groups) — screening indicators only. Redshift z shifts rest wavelengths.</p>
-                <div id="light-sources"></div>
-              </details>
-
-              <details class="coverage-help">
-                <summary>Records</summary>
-                <div id="measurement-table" class="measurement-table"></div>
-                <button id="more-measurements" type="button" class="btn-ghost">Show more</button>
-              </details>
-            </div>
           </section>
-        </div>
+
+          <div class="tracking-bar inspector-section">
+            <div class="tracking-head">
+              <div class="tracking-title-row">
+                <h2 class="section-title">Motion tracker</h2>
+                <span id="track-kind-pill" class="track-kind-pill">Ready</span>
+              </div>
+              <p id="track-status" role="status">Click a star or asteroid, then track its path.</p>
+            </div>
+            <label class="track-object" for="track-object">Solar System object (optional, uses JPL Horizons)
+              <input id="track-object" type="text" placeholder="Vesta, 4, 433 Eros" autocomplete="off" spellcheck="false">
+            </label>
+            <div class="tracking-actions">
+              <button id="track-star" type="button" class="btn-brass">Track point</button>
+              <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false" title="Needs a clicked point first. Then step to another frame and click the moving object to anchor its path.">Pick 2nd</button>
+              <button id="track-3d" type="button" class="btn-outline" disabled title="Needs a tracked Gaia DR3 star with a reliable distance (parallax over 20 times its error, RUWE below 1.4).">3D motion</button>
+              <button id="track-clear" type="button" class="btn-ghost">Clear</button>
+            </div>
+            <p id="track-help" class="track-help">Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.</p>
+            <div id="track-result" hidden>
+              <div id="track-eph" class="track-eph" hidden>
+                <p id="track-source" class="track-source"></p>
+                <p id="track-timescale"></p>
+                <ul id="track-warnings" class="track-warnings"></ul>
+                <p id="track-offset"></p>
+                <p id="track-flag" class="track-flag" role="alert" hidden></p>
+              </div>
+              <div id="track-kpis" class="track-kpis">
+                <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong><small id="kpi-speed-pred"></small></div>
+                <div class="track-kpi"><span>Heading</span><strong id="kpi-heading">—</strong><small id="kpi-heading-pred"></small></div>
+                <div class="track-kpi"><span>Change</span><strong id="kpi-change">—</strong></div>
+                <div class="track-kpi"><span>Measured</span><strong id="kpi-points">—</strong></div>
+              </div>
+              <div class="track-charts">
+                <svg id="track-plot" viewBox="0 0 400 180" role="img" aria-label="Measured sky trajectory relative to the reference observation"></svg>
+                <svg id="track-change-plot" viewBox="0 0 400 150" role="img" aria-label="Cumulative path and interval speed over time"></svg>
+              </div>
+              <p id="track-summary"></p>
+              <div class="track-result-actions">
+                <button id="track-path" type="button" class="btn-outline btn-compact" hidden>Predicted path details</button>
+                <button id="track-export" type="button" class="btn-outline btn-compact">Export JSON</button>
+              </div>
+              <details>
+                <summary>Method &amp; limits</summary>
+                <p>Measures native-pixel 2D Gaussian centroids (with unsaturated wing fallback on bright or saturated cores). Matches Gaia DR3 when unique, follows archived ephemerides for Solar System objects like Vesta, or uses an optional 2nd-frame anchor for custom moving objects. Click any point or speed bar to jump frames.</p>
+              </details>
+            </div>
+          </div>
+
+        </aside>
       </div>
     </div>
 
