@@ -76,10 +76,32 @@ function drawCenter(ctx, x, y) {
   ctx.restore();
 }
 
-function drawGuide(ctx, x, y) {
+// Where the selected target is expected in this frame before any tracking: the archived Vesta
+// prediction, or the centre of a saved star field. An expected position, not a measurement.
+// ICRS position at epoch J2000 (deg) and proper motion (mas/yr, RA term includes cos Dec), SIMBAD 2026-11-13.
+// These targets move a SPHEREx pixel or more per year, so a saved field centre does not stay on them.
+const MOVERS = {
+  barnard: [269.4520769586, 4.6933649666, -801.551, 10362.394],
+  "epsilon-indi": [331.0441465885, -56.7828441951, 3981.977, -2466.832],
+  "wise-0855": [133.81890825, -7.247048, -8123.7, 673.2],
+};
+function targetAt(frame) {
+  // A Horizons track draws its own named box on Vesta, so the expected-position box steps aside
+  if (frame.marker) return typeof StarTracker !== "undefined" && Object.keys(StarTracker.kinds()).length ? null : frame.marker;
+  if (state.field === "custom" || state.field === "vesta") return null;
+  const m = MOVERS[state.field];
+  if (!m) return [.5,.5];
+  // shortcut: flat-sky offset from the view centre, exact to well under a pixel within a few arcmin; use a TAN projection if a target ever sits far from centre
+  const {ra, dec, fov} = state.session.options, years = (new Date(frame.timestamp) - Date.UTC(2000,0,1,12)) / 31557600000;
+  const east = (m[0]-ra)*Math.cos(m[1]*Math.PI/180)*3600 + m[2]*years/1000, north = (m[1]-dec)*3600 + m[3]*years/1000;  // arcsec
+  const x = .5 - east/(fov*60), y = .5 - north/(fov*60);
+  return x < 0 || x > 1 || y < 0 || y > 1 ? null : [x,y];
+}
+
+function drawTarget(ctx, x, y) {
   ctx.strokeStyle = "#eab354"; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.arc(x,y,13,0,2*Math.PI); ctx.stroke();
-  markLabel(ctx, "Guide", x+17, y+22, "#eab354");  // below the circle: tracker labels sit above it
+  ctx.strokeRect(x-21,y-21,42,42);
+  markLabel(ctx, state.title, x-21, y+36, "#eab354");  // below the box: tracker labels sit above it
 }
 
 function drawClick(ctx, x, y) {
@@ -92,7 +114,7 @@ function drawClick(ctx, x, y) {
 const legendGlyphs = {
   center: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M4 11h14M11 4v14" stroke="#d9d4c8" stroke-opacity=".8" stroke-width="1" fill="none"/></svg>',
   click: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M11 3v5M11 14v5M3 11h5M14 11h5" stroke="#6cb8ff" stroke-width="1.6" fill="none"/></svg>',
-  guide: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="#eab354" stroke-width="1.6" fill="none"/></svg>',
+  guide: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><rect x="4" y="4" width="14" height="14" stroke="#eab354" stroke-width="1.6" fill="none"/></svg>',
   measured: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="#68d391" stroke-width="1.8" fill="none"/></svg>',
   wing: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="#71d9f6" stroke-width="1.8" fill="none"/></svg>',
   predicted: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="#b9a3f5" stroke-width="1.8" stroke-dasharray="3.5 3" fill="none"/></svg>',
@@ -107,7 +129,7 @@ function updateLegend() {
   const items = [];
   if (frame && $("markers").checked) {
     items.push(["center","Field center"]);
-    if (frame.marker) items.push(["guide","Vesta guide (archived, not measured)"]);
+    if (targetAt(frame)) items.push(["guide",`${state.title} · expected position, not measured`]);
   }
   if (frame && state.point) items.push(["click","Clicked pixel"]);
   const kinds = frame && typeof StarTracker !== "undefined" ? StarTracker.kinds() : {};
@@ -149,7 +171,8 @@ async function paint(canvas, frame, version) {
   if (mask) ctx.drawImage(mask,left,top,side,side);
   if ($("markers").checked) {
     drawCenter(ctx,left+.5*side,top+.5*side);
-    if (frame.marker) drawGuide(ctx,left+frame.marker[0]*side,top+frame.marker[1]*side);
+    const at = targetAt(frame);
+    if (at) drawTarget(ctx,left+at[0]*side,top+at[1]*side);
   }
   if (state.point) drawClick(ctx,left+state.point.x*side,top+state.point.y*side);
   if (typeof StarTracker !== "undefined") StarTracker.paint(ctx, frame, {side,left,top});
@@ -237,7 +260,7 @@ function setFrame(index) {
   if (state.field === "vesta" && $("vesta-guide") && !$("vesta-guide").hidden) {
     const marked = state.session.frames.map((item,i)=>item.marker?i:-1).filter(i=>i>=0);
     $("vesta-guide-text").textContent = frame.marker
-      ? `Frame ${index+1}: the gold circle is a suggested Vesta location on ${dateText(frame.timestamp)}. Switch to the other marked frame to see it shift. This is a guide, not a measured detection.`
+      ? `Frame ${index+1}: the gold box is a suggested Vesta location on ${dateText(frame.timestamp)}. Switch to the other marked frame to see it shift. This is a guide, not a measured detection.`
       : `Frame ${index+1} has no Vesta guide. The ivory cross is only the field center. Use “Show other marked frame” for the two-frame example.`;
     $("vesta-next-guide").disabled = marked.length < 2;
   }
@@ -277,8 +300,11 @@ function sessionReady(session, request) {
   state.session = session;
   state.title = request.title;
   state.field = request.field;
-  state.index = 0;
-  if (previousTime && session.frames.length) {
+  // Vesta is in only a few frames of its patch: a newly opened patch starts on one that shows it
+  const shown = session.frames.findIndex(frame => frame.marker), prev = state.session?.options;
+  const samePatch = prev && prev.ra === session.options.ra && prev.dec === session.options.dec;
+  state.index = Math.max(0, shown);
+  if (previousTime && session.frames.length && (shown < 0 || samePatch)) {
     state.index = session.frames.reduce((best, frame, i, frames) =>
       Math.abs(new Date(frame.timestamp)-new Date(previousTime)) < Math.abs(new Date(frames[best].timestamp)-new Date(previousTime)) ? i : best, 0);
   }

@@ -79,7 +79,13 @@ const StarTracker = (() => {
         const status=await api('/api/jobs/'+job.id);if(token!==version)return;
         $("track-status").textContent=status.stage;
         if(status.status==='failed')throw new Error(status.stage);
-        if(status.status==='complete'){result=status.result;render();draw();break;}
+        if(status.status==='complete'){
+          result=status.result;render();draw();
+          // A fixed sky patch holds the object in only a few frames: open on one of them
+          const hit=result.ephemeris&&!result.points.find(p=>p.index===state.index)?.accepted&&result.points.find(p=>p.accepted);
+          if(hit)setFrame(hit.index);
+          break;
+        }
         await new Promise(resolve=>setTimeout(resolve,600));
       }
     }catch(e){if(token===version){$("track-status").textContent=e.message;$("track-status").classList.add("track-error");}}
@@ -317,7 +323,11 @@ const StarTracker = (() => {
       const bad=p.accepted&&p.within_tolerance===false;
       const stroke=bad?BAD:p.accepted?(p.fit_mode==='wing'?'#71d9f6':markColor):'#b9a3f5';
       ctx.strokeStyle=stroke;ctx.lineWidth=1.8;ctx.setLineDash(p.accepted?[]:[4,4]);
-      ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+      ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();
+      // Box and name the Solar System object, so it is not mistaken for a neighbouring star
+      if(result.ephemeris)ctx.strokeRect(x-21,y-21,42,42);
+      ctx.setLineDash([]);
+      if(result.ephemeris)markLabel(ctx,result.ephemeris.object||'Tracked object',x-21,y-27,stroke);
 
       // Draw pixel velocity arrow along ordered path
       const nextPt=ordered.find(v=>v.mjd>p.mjd) || past[past.length-1];
@@ -342,7 +352,7 @@ const StarTracker = (() => {
         ctx.strokeStyle=PRED;ctx.lineWidth=2;ctx.beginPath();
         ctx.moveTo(qx,qy-7);ctx.lineTo(qx+7,qy);ctx.lineTo(qx,qy+7);ctx.lineTo(qx-7,qy);ctx.closePath();ctx.stroke();
         if(p.accepted&&p.offset_arcsec!=null)markLabel(ctx,`Δ ${p.offset_arcsec.toFixed(1)}″${bad?' · outside tolerance':''}`,x+23,y+4,stroke);
-        markLabel(ctx,'JPL predicted',qx+10,qy+18,PRED);
+        markLabel(ctx,'JPL predicted',qx+10,y+36,PRED);  // below the object box
       }
     }else if(!p.accepted){
       // No measurement and no prediction to mark: say why on the image itself.
