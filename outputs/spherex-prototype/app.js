@@ -786,7 +786,8 @@ window.addEventListener?.("universe-open-object", event => {
   $("search-form").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-$("search-form").onsubmit = event => { event.preventDefault(); state.title = "Sky patch"; state.field = "custom"; state.objectContext = null; search(); };
+// Editing RA/Dec already turns the view into a custom patch (input listener below); an unedited saved target keeps its name and box
+$("search-form").onsubmit = event => { event.preventDefault(); search(); };
 $("archive-search").onclick = () => {
   if (!state.objectContext) {
     state.title = "IRSA patch";
