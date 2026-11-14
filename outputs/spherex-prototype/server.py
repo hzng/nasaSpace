@@ -427,10 +427,24 @@ def create_track(job_id, payload):
             filename=frame['fits_url'].removeprefix('/cache/')
             if not re.fullmatch(r'[a-f0-9]{64}\.fits',filename): raise ValueError('Original FITS unavailable')
             return str(CACHE/filename)
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            paths=list(pool.map(local_path,manifest['frames']))
         def progress(message):
             with LOCK: JOBS[job_id].update(stage=message)
+        # A cold cache can mean minutes of downloads, so count them through the same job stage
+        frames=manifest['frames']
+        cold=lambda frame:(rec:=lookup.get(frame['sha256'])) is not None and not available(rec)
+        missing=sum(map(cold,frames))
+        progress(f'Downloading frames 0 / {missing} ({len(frames)-missing} already cached)' if missing
+                 else f'All {len(frames)} frames already cached')
+        fetched=[0]
+        def fetch(frame):
+            download=cold(frame)
+            path=local_path(frame)
+            if download:
+                with LOCK: fetched[0]+=1; done=fetched[0]
+                progress(f'Downloading frames {min(done,missing)} / {missing}')
+            return path
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            paths=list(pool.map(fetch,frames))
         result=track(manifest,paths,payload,CACHE,progress)
         with LOCK: JOBS[job_id].update(status='complete',stage='Track ready',result=result)
     except Exception as error:

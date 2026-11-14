@@ -2,9 +2,9 @@
 
 Written 2026-11-13. This is the contract for every restyling task. Where a task brief and this file disagree, this file wins. The problems it answers are in `outputs/ui-audit.md`.
 
-## Direction: a quiet instrument
+## Direction: an instrument with a voice
 
-The data is the only colourful thing on the page. The chrome is neutral graphite with white-on-dark controls, hairline borders and no decoration. One filled button per region. Patterns are borrowed from well-known product UIs (calm spacing and type, command-style menus, the select-only combobox pattern); no brand, logo, font or layout is copied.
+Revised 2026-11-13 after the user found the first pass "almost looks the same". The chrome stays neutral graphite, but it now has one accent colour with meaning (action blue: what you act on and what is selected), says in large type what you are looking at (the target name and the observation date), and separates sections with space more than lines. One filled button per region. Patterns are borrowed from well-known product UIs (calm spacing and type, command-style menus, the select-only combobox pattern); no brand, logo, font or layout is copied.
 
 Rules:
 
@@ -18,36 +18,38 @@ Defined once in `css/tokens.css`. Nothing else may hard-code a colour.
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--bg` | `#0b0c0e` | page |
-| `--panel` | `#121316` | panels, menus, dialogs |
-| `--surface` | `#191b1f` | controls, cards inside panels |
-| `--surface-hover` | `#212328` | hover and pressed fill |
-| `--canvas-bg` | `#060709` | image and chart wells |
+| `--bg` | `#000000` | page |
+| `--panel` | `#161617` | panels, menus, dialogs |
+| `--surface` | `#1d1d1f` | controls, cards inside panels |
+| `--surface-hover` | `#262628` | hover and pressed fill |
+| `--canvas-bg` | `#000000` | image and chart wells |
 | `--line` | `rgba(255,255,255,0.08)` | hairlines, default borders |
 | `--line-strong` | `rgba(255,255,255,0.16)` | control borders, hover borders |
-| `--text` | `#ededef` | primary text |
-| `--muted` | `#a0a3ab` | secondary text, labels |
-| `--subtle` | `#858892` | tertiary text, placeholders |
-| `--accent` | `#ededef` | filled primary button, checked and selected states |
-| `--accent-hover` | `#ffffff` | primary hover |
-| `--accent-ink` | `#0b0c0e` | text on `--accent` |
-| `--accent-soft` | `rgba(255,255,255,0.08)` | selected row, pressed toggle |
-| `--focus` | `#6ea8fe` | keyboard focus ring only |
+| `--text` | `#f5f5f7` | primary text |
+| `--muted` | `#a1a1a6` | secondary text, labels |
+| `--subtle` | `#86868b` | tertiary text, placeholders |
+| `--accent` | `#0071e3` | primary button, selected tab underline, active mode icon, menu check mark, slider thumb, checkbox; never text |
+| `--accent-hover` | `#0062c4` | primary hover |
+| `--accent-ink` | `#ffffff` | text on `--accent` |
+| `--accent-tint` | `rgba(0,113,227,0.22)` | active mode switch fill |
+| `--accent-soft` | `rgba(255,255,255,0.08)` | neutral: hover fill, selected row, pressed toggle |
+| `--focus` | `var(--accent)` | keyboard focus ring |
 | `--warning` | `#e5b25d` | data-quality warnings, flags |
 | `--warning-soft` | `rgba(229,178,93,0.12)` | warning fill |
 | `--danger` | `#f0806e` | errors, out-of-tolerance |
 | `--positive` | `#68d391` | confirmed, within tolerance |
 | `--sky`, `--predict` | unchanged | only where the DOM repeats a canvas mark (legend swatches, path card) |
 
-Contrast, computed with the WCAG formula (AA needs 4.5:1 for text): `--text` on `--bg` 16.7:1; `--muted` on `--surface` 6.8:1 and on `--surface-hover` 6.2:1; `--subtle` on `--surface` 4.9:1; `--accent-ink` on `--accent` 16.7:1; `--warning` on `--surface` 8.9:1; `--danger` on `--panel` 7.1:1; `--positive` on `--panel` 10.0:1; `--focus` on `--surface` 7.1:1. `--subtle` must not be used on `--surface-hover`. Disabled text is exempt and uses 45% opacity.
+Palette revised 2026-11-13 to follow Apple's dark product pages (black page, graphite surfaces, `#f5f5f7` text, `#0071e3` action blue). Contrast, computed with the WCAG formula (AA needs 4.5:1 for text, 3:1 for non-text): `--text` on `--bg` 19.3:1; `--muted` on `--surface` 6.5:1 and on `--surface-hover` 5.9:1; `--subtle` on `--surface` 4.6:1; `--accent-ink` on `--accent` 4.7:1 and on `--accent-hover` 5.9:1; `--accent` on `--panel` 3.9:1 (non-text only); `--warning` on `--surface` 8.7:1; `--danger` on `--panel` 6.9:1; `--positive` on `--panel` 9.7:1; `--focus` on `--surface` 3.6:1. `--subtle` must not be used on `--surface-hover`. Disabled text is exempt and uses 45% opacity.
 
 ## Type
 
 - UI font: the system stack already in use, `"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif`. No web font.
 - Data font `--mono`: `ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace` (no ligatures). Use it only for identifiers, hashes and coordinates. Numbers elsewhere use the UI font with `font-variant-numeric: tabular-nums`.
-- Scale (px / line-height): 11 / 16 micro, only for badges on the image; 12 / 16 secondary and labels; 13 / 20 body and controls; 14 / 20 section titles; 16 / 24 panel and dialog titles; 20 / 28 screen title. Nothing else.
-- Weights: 400 body, 500 controls and labels that act, 600 titles and key values. Nothing above 600.
-- Sentence case everywhere. No uppercase labels, no letter-spacing above 0.
+- Scale (px / line-height): 11 / 16 micro, only for badges on the image; 12 / 16 secondary and labels; 13 / 20 body and controls; 16 / 24 section and panel titles; 20 / 28 page-section title (Spectrum); 24 / 28 observation date; 32 / 36 display, the target name above the image. Nothing else.
+- Weights: 400 body, 500 controls and labels that act, 600 titles and key values, 700 only for the display name, the observation date and page-section titles.
+- Sentence case everywhere. No uppercase labels. Letter-spacing is negative only at 16 px and above (-0.01 to -0.03em).
+- Target first: the target name, its category ("Asteroid", "Nearby star") and its position sit above the image.
 - Labels are `--muted` 12 px above or before the value; values are `--text` 13 px. Values are never bolder than the nearest heading.
 
 ## Spacing, radii, borders, shadows
@@ -64,9 +66,9 @@ Contrast, computed with the WCAG formula (AA needs 4.5:1 for text): `--text` on 
 - **Fields**: `--surface` fill, `--line-strong` border, label outside or as a muted prefix. Focus changes the border to `--focus` and adds the ring.
 - **Select and menu**: every native `<select>` is replaced on screen by the `ui-select` component (trigger button plus a listbox in the top layer); see the component brief in the plan. The target switcher and every popover share the same surface, row and selection styles. Selected rows show a check mark and `--accent-soft` fill, never a coloured outline.
 - **Toggles**: a pressed toggle chip is `--accent-soft` fill with `--text`; unpressed is `--muted`. The native checkbox box is hidden inside chips that carry an icon; standalone checkboxes are 16 px, neutral, with a white check.
-- **Tabs and segmented controls**: text only; active is `--text` with a 2 px `--text` underline (tabs) or an `--accent-soft` fill (segmented).
+- **Tabs and segmented controls**: text only; active is `--text` with a 2 px `--accent` underline (tabs) or an `--accent-soft` fill (segmented). The app-bar mode switch uses `--accent-tint` and an `--accent` icon.
 - **Status pill**: 20 px tall, 11 px text, tinted by meaning (neutral, positive, warning, danger).
-- **Disclosure rows** (`details`): muted 13 px summary with a chevron that rotates; never coloured.
+- **Disclosure rows** (`details`): one component, in `css/controls.css`. A full-width row `--control-h` tall, label 13 px weight 500 `--text`, optional `.summary-meta` value in `--muted` at the right, a 14 px chevron (SVG mask) at the right edge that turns 180° when open, neutral hover fill. Open content is 13 px `--muted`, indented to the label. Related rows form one list with hairlines between them. Area files add only layout.
 - **Empty and loading states**: one line of `--muted` 13 px text, optionally a 2 px progress bar; no icons, no bold.
 
 ## States
@@ -84,6 +86,8 @@ Every interactive element has all of these:
 
 - Colour and border transitions 120 ms; menus and popovers 160 ms (opacity plus a 4 px rise); dialogs 200 ms. Easing `cubic-bezier(0.2, 0.8, 0.2, 1)`.
 - Nothing loops, nothing bounces, nothing animates on page load except content that is loading.
+- One authored moment (in `css/overrides.css`): a freshly fetched view comes into focus (blur 6 px to sharp, 450 ms, `cubic-bezier(0.16, 1, 0.3, 1)`), and when the target changes its name wipes in left to right (clip-path, 500 ms) with the category line fading in after it. Playback and revisited views stay instant so blinking between frames is honest.
+- Supporting motion: disclosure rows open by height (220 ms open, 150 ms close; the toolbar date filter is excluded); each pixel result fades in (160 ms).
 - Under `prefers-reduced-motion: reduce`, all transitions and animations are off.
 
 ## Layout

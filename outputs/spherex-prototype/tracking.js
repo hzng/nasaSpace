@@ -5,11 +5,18 @@ const StarTracker = (() => {
   // and xyz only when parallax/error > 20 and RUWE < 1.4 (lines 243-244); tracking.js enables the button on catalog.xyz.
   const HELP_IDLE="Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.";
   const setText=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
-  const PRED='#c9a0ff', BAD='#f0806e';
+  const PRED='#b9a3f5', BAD='#f0806e';
   let typedObject=false;
-  const prefillObject=()=>{if(!typedObject)$("track-object").value=state.field==='vesta'?'Vesta':'';};
+  // A named object is tracked at its JPL position (tracking.py warns about the click distance only afterwards), so say so up front
+  const noteObject=()=>{const v=$("track-object").value.trim();$("track-object-note").hidden=!v;setText("track-object-note",`Tracks ${v} at its JPL-predicted position, not the pixel you click.`);};
+  const prefillObject=()=>{if(!typedObject)$("track-object").value=state.field==='vesta'?'Vesta':'';noteObject();};
+  // Busy state: Track point says it is working and Clear becomes Cancel; clear() and the run's end restore both
+  // While busy, #track-status shows each stage silently; the hidden announcer speaks only start, finish and failure
+  const announcer=document.createElement("p");announcer.className="sr-only";announcer.setAttribute("role","status");$("track-status").after(announcer);
+  const announce=msg=>{announcer.textContent=msg;};
+  const setBusy=busy=>{$("track-star").textContent=busy?"Tracking…":"Track point";setText("track-clear",busy?"Cancel":"Clear");$("track-status")[busy?"removeAttribute":"setAttribute"]("role","status");};
   // Editing the object invalidates a running request, so its answer is never shown under the new name
-  $("track-object").addEventListener('input',()=>{typedObject=true;version++;if($("track-star").disabled){$("track-star").disabled=false;$("track-status").textContent="Object changed. Press Track point to run again.";}});
+  $("track-object").addEventListener('input',()=>{typedObject=true;noteObject();version++;if($("track-star").disabled){$("track-star").disabled=false;setBusy(false);$("track-status").textContent="Object changed. Press Track point to run again.";}});
   const compass=deg=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8];
 
   const fmtSpeed=m=>m.preferred_unit==='hr'?`${m.speed_arcsec_per_hr.toFixed(1)} ″/hr`:`${m.speed_arcsec_per_year.toFixed(2)} ″/yr`;
@@ -28,7 +35,8 @@ const StarTracker = (() => {
     $("track-result").hidden=true;
     $("track-3d").disabled=true;
     setText("track-help",HELP_IDLE);
-    $("track-star").disabled=false;
+    $("track-star").disabled=false;setBusy(false);
+    $("vesta-callout").hidden=false;
     $("track-status").textContent="Click a star or asteroid, then track its path.";$("track-status").classList.remove("track-error");
     setText("track-kind-pill","Ready");
     setText("kpi-speed","—");setText("kpi-heading","—");setText("kpi-change","—");setText("kpi-points","—");
@@ -66,7 +74,9 @@ const StarTracker = (() => {
     if(!state.session?.frames.length)return;
     const obj=$("track-object").value.trim();
     if(!choice&&!obj){$("track-status").textContent="Click a star or moving object in the image first, or type a Solar System object.";return;}
-    const token=++version;$("track-star").disabled=true;$("track-status").classList.remove("track-error");
+    const token=++version;$("track-star").disabled=true;setBusy(true);$("track-status").classList.remove("track-error");announce("Tracking started.");
+    // The walkthrough card has done its job once a track starts; it returns on Clear or a new pick
+    $("vesta-callout").hidden=true;
     // Drop the previous result first: a failed rerun must not leave an earlier success on screen
     result=null;$("track-result").hidden=true;$("track-3d").disabled=true;draw();
     try{
@@ -80,16 +90,18 @@ const StarTracker = (() => {
         $("track-status").textContent=status.stage;
         if(status.status==='failed')throw new Error(status.stage);
         if(status.status==='complete'){
-          result=status.result;render();draw();
+          result=status.result;render();draw();announce("Track ready. "+$("track-status").textContent);
           // A fixed sky patch holds the object in only a few frames: open on one of them
           const hit=result.ephemeris&&!result.points.find(p=>p.index===state.index)?.accepted&&result.points.find(p=>p.accepted);
           if(hit)setFrame(hit.index);
+          // The verdict is the payoff: bring it into view in the side panel's own scroll
+          $("track-verdict").scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
           break;
         }
         await new Promise(resolve=>setTimeout(resolve,600));
       }
-    }catch(e){if(token===version){$("track-status").textContent=e.message;$("track-status").classList.add("track-error");}}
-    finally{if(token===version)$("track-star").disabled=false;}
+    }catch(e){if(token===version){$("track-status").textContent=e.message;$("track-status").classList.add("track-error");announce("Tracking failed. "+e.message);}}
+    finally{if(token===version){$("track-star").disabled=false;setBusy(false);}}
   };
 
   function svgEl(parent,tag,attrs,text){
@@ -106,7 +118,8 @@ const StarTracker = (() => {
     svg.replaceChildren();
     const segs=result.segments||[];
     if(!segs.length){
-      svgEl(svg,'text',{x:200,y:78,fill:'#8a94a6','font-size':11,'text-anchor':'middle'},'Need 2+ distinct epochs for speed & change curve');
+      svgEl(svg,'text',{x:200,y:78,fill:'#86868b','font-size':11,'text-anchor':'middle'},'Need 2+ distinct epochs for speed & change curve');
+      svg.setAttribute('aria-label','Cumulative path and interval speed over time: needs 2 or more distinct epochs, none plotted.');
       return;
     }
     const useHr=result.motion?.preferred_unit==='hr';
@@ -115,7 +128,7 @@ const StarTracker = (() => {
     const maxSpd=Math.max(1e-3,...speeds);
     const t0=segs[0].mjd_start, span=Math.max(1e-3,segs[segs.length-1].mjd_end-t0);
     const x0=44,x1=360,yTop=18,yBot=118;
-    svgEl(svg,'path',{d:`M${x0} ${yBot}H${x1} M${x0} ${yTop}V${yBot}`,stroke:'#384150','stroke-width':1});
+    svgEl(svg,'path',{d:`M${x0} ${yBot}H${x1} M${x0} ${yTop}V${yBot}`,stroke:'#3a3a3c','stroke-width':1});
     // Step speed bars (cyan)
     const barW=Math.max(6,Math.min(26,(x1-x0)/Math.max(2,segs.length)*0.55));
     for(let i=0;i<segs.length;i++){
@@ -144,6 +157,7 @@ const StarTracker = (() => {
     }
     svgEl(svg,'text',{x:x0,y:138,fill:'#eab354','font-size':10},`Path 0→${maxCum.toFixed(1)}″`);
     svgEl(svg,'text',{x:x1,y:138,fill:'#71d9f6','font-size':10,'text-anchor':'end'},`Peak ${maxSpd.toFixed(2)} ${useHr?'″/hr':'″/yr'}`);
+    svg.setAttribute('aria-label',`Cumulative path and interval speed over time: ${segs.length} step${segs.length===1?'':'s'} over ${span.toFixed(1)} days, path length ${maxCum.toFixed(1)}″, peak step speed ${maxSpd.toFixed(2)} ${useHr?'″/hr':'″/yr'}.`);
   }
 
   const f=(v,d=1)=>v==null?'n/a':Number(v).toFixed(d);
@@ -207,6 +221,26 @@ const StarTracker = (() => {
     const eph=result.ephemeris, em=eph?.motion;
     setText("kpi-speed-pred",em?`predicted ${fmtSpeed(em)}`:"");
     setText("kpi-heading-pred",em?`predicted ${fmtHead(em)}`:"");
+    // Verdict first: only the measured and predicted values already computed above
+    const both=!!(m&&em);
+    setText("verdict-head",!m?'Measure at least two epochs to fit velocity.'
+      :both?`Speed within ${(Math.abs(m.speed_arcsec_per_year-em.speed_arcsec_per_year)/em.speed_arcsec_per_year*100).toFixed(1)}% of JPL`
+      :`${fmtSpeed(m)} toward ${fmtHead(m)}`);
+    $("verdict-head").classList.toggle("pending",!m);
+    // The sample size is part of the claim, so it sits inside the headline; under 5 measured frames it reads as low confidence
+    const low=!!m&&points.length<5;
+    $("verdict-head").classList.toggle("low",low);
+    if(m){
+      const sample=document.createElement("span");sample.className="verdict-sample";
+      sample.textContent=`${low?"Low confidence · ":""}${points.length} of ${result.points.length} frames measured`;
+      $("verdict-head").append(sample);
+    }
+    $("verdict-compare").hidden=!both;
+    $("track-kpis").classList.toggle("compared",both);
+    if(both){
+      setText("verdict-m-speed",fmtSpeed(m));setText("verdict-m-head",`toward ${fmtHead(m)}`);
+      setText("verdict-p-speed",fmtSpeed(em));setText("verdict-p-head",`toward ${fmtHead(em)}`);
+    }
     renderEphemeris(eph);
     setText("kpi-change",ch?ch.state:`${points.length>=2?'Linear':'Single epoch'}`);
     setText("kpi-points",`${points.length} / ${result.points.length} pts`);
@@ -223,25 +257,40 @@ const StarTracker = (() => {
     const svg=$("track-plot");svg.replaceChildren();
     const preds=eph?result.points.filter(p=>p.predicted_east_arcsec!=null).sort((a,b)=>a.mjd-b.mjd):[];
     // With no centroid at all the predicted path is still drawn, and the change chart never keeps an older result
+    svg.setAttribute('aria-label','Sky trajectory relative to the reference observation: no measured or predicted positions to plot.');
     if(!points.length&&!preds.length){renderChangeChart();return;}
-    const span=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec),...preds.map(p=>Math.max(Math.abs(p.predicted_east_arcsec),Math.abs(p.predicted_north_arcsec))));
+    const pext=p=>Math.max(Math.abs(p.predicted_east_arcsec),Math.abs(p.predicted_north_arcsec));
+    const fit=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec));
+    // Axes follow the measured points; a prediction reaching far past them is clipped instead of shrinking them to one dot
+    const span=points.length?Math.max(fit,...preds.map(pext).filter(v=>v<=3*fit)):Math.max(1,...preds.map(pext));
+    const offPlot=preds.some(p=>pext(p)>span*1.25);
     const scale=64/span, ox=200, oy=82;
-    svgEl(svg,'path',{d:'M60 82H340 M200 12V152',stroke:'#384150'});
+    svg.setAttribute('aria-label',`Sky trajectory relative to the reference observation, within ±${span.toFixed(1)}″: ${points.length} of ${result.points.length} frames measured`
+      +(preds.length?`, ${preds.length} JPL-predicted positions${offPlot?' (path continues off-plot)':''}`:'')
+      +(eph?.compared?`, median measured − predicted offset ${f(eph.offset_median_arcsec)}″`:'')
+      +(m?`; net ${m.net_arcsec.toFixed(1)}″ toward ${fmtHead(m)} at ${fmtSpeed(m)}`:'')+'.');
+    svgEl(svgEl(svg,'clipPath',{id:'track-plot-clip'}),'rect',{x:0,y:0,width:400,height:160});
+    if(offPlot)svgEl(svg,'text',{x:392,y:12,fill:PRED,'font-size':10,'text-anchor':'end'},'JPL path continues off-plot');
+    svgEl(svg,'path',{d:'M60 82H340 M200 12V152',stroke:'#3a3a3c'});
     // Trajectory path line connecting measured positions chronologically
     if(points.length>=2){
       const d=points.map((p,idx)=>`${idx?'L':'M'}${(ox+scale*p.east_arcsec).toFixed(1)} ${(oy-scale*p.north_arcsec).toFixed(1)}`).join(' ');
-      svgEl(svg,'path',{d,fill:'none',stroke:result.target_kind==='asteroid'?'#eab354':'#68d391','stroke-width':1.8,'stroke-opacity':.75});
+      svgEl(svg,'path',{d,fill:'none',stroke:result.target_kind==='asteroid'?'#eab354':'#68d391','stroke-width':1.8,'stroke-opacity':.75,pathLength:1,class:'trace'});
       const pFirst=points[0], pLast=points[points.length-1];
       const ax1=ox+scale*pFirst.east_arcsec, ay1=oy-scale*pFirst.north_arcsec;
       const ax2=ox+scale*pLast.east_arcsec, ay2=oy-scale*pLast.north_arcsec;
       const ang=Math.atan2(ay2-ay1,ax2-ax1);
-      svgEl(svg,'path',{d:`M${ax2-7*Math.cos(ang-.45)} ${ay2-7*Math.sin(ang-.45)} L${ax2} ${ay2} L${ax2-7*Math.cos(ang+.45)} ${ay2-7*Math.sin(ang+.45)}`,fill:'none',stroke:'#f5f7fa','stroke-width':1.6});
+      svgEl(svg,'path',{d:`M${ax2-7*Math.cos(ang-.45)} ${ay2-7*Math.sin(ang-.45)} L${ax2} ${ay2} L${ax2-7*Math.cos(ang+.45)} ${ay2-7*Math.sin(ang+.45)}`,fill:'none',stroke:'#f5f5f7','stroke-width':1.6});
     }
-    svgEl(svg,'text',{x:10,y:170,fill:'#9fb0c4','font-size':10},eph?`East → / North ↑ · ±${span.toFixed(1)}″ · solid=measured · dashed=predicted (JPL)`:`East → / North ↑ · ±${span.toFixed(1)}″ · green=core · cyan=wing`);
+    svgEl(svg,'text',{x:10,y:170,fill:'#a1a1a6','font-size':10},eph?`East → / North ↑ · ±${span.toFixed(1)}″ · solid=measured · dashed=predicted (JPL)`:`East → / North ↑ · ±${span.toFixed(1)}″ · green=core · cyan=wing`);
     if(preds.length){
       const px=p=>ox+scale*p.predicted_east_arcsec, py=p=>oy-scale*p.predicted_north_arcsec;
+      const svg=svgEl($("track-plot"),'g',{'clip-path':'url(#track-plot-clip)'});
       for(const p of points)if(p.predicted_east_arcsec!=null)svgEl(svg,'line',{x1:ox+scale*p.east_arcsec,y1:oy-scale*p.north_arcsec,x2:px(p),y2:py(p),stroke:p.within_tolerance===false?BAD:PRED,'stroke-width':1,'stroke-opacity':.8});
-      svgEl(svg,'path',{d:preds.map((p,i)=>`${i?'L':'M'}${px(p).toFixed(1)} ${py(p).toFixed(1)}`).join(' '),fill:'none',stroke:PRED,'stroke-width':1.6,'stroke-dasharray':'5 4'});
+      const pd=preds.map((p,i)=>`${i?'L':'M'}${px(p).toFixed(1)} ${py(p).toFixed(1)}`).join(' ');
+      // The dashed JPL path draws on through a solid mask, in step with the measured trace
+      svgEl(svgEl(svg,'mask',{id:'jpl-draw',maskUnits:'userSpaceOnUse',x:0,y:0,width:400,height:180}),'path',{d:pd,fill:'none',stroke:'#fff','stroke-width':6,pathLength:1,class:'trace'});
+      svgEl(svg,'path',{d:pd,fill:'none',stroke:PRED,'stroke-width':1.6,'stroke-dasharray':'5 4',mask:'url(#jpl-draw)'});
       for(const p of preds)svgEl(svg,'path',{d:`M${px(p)} ${py(p)-4}L${px(p)+4} ${py(p)}L${px(p)} ${py(p)+4}L${px(p)-4} ${py(p)}Z`,fill:'none',stroke:PRED,'stroke-width':1.3});
     }
     for(const p of points){

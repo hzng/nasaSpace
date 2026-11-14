@@ -5,25 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Inspect real archived SPHEREx observations, spectra, and catalog 3D distances.">
   <title>SPHEREx · Celestial Workbench</title>
-  <link rel="stylesheet" href="css/tokens.css?v=12">
-  <link rel="stylesheet" href="css/controls.css?v=12">
-  <link rel="stylesheet" href="css/appbar.css?v=12">
-  <link rel="stylesheet" href="css/menu.css?v=12">
-  <link rel="stylesheet" href="css/stage.css?v=12">
-  <link rel="stylesheet" href="css/inspector.css?v=12">
-  <link rel="stylesheet" href="css/spectrum.css?v=12">
-  <link rel="stylesheet" href="css/atlas.css?v=12">
-  <link rel="stylesheet" href="css/tracker.css?v=12">
-  <link rel="stylesheet" href="css/dialogs.css?v=12">
-  <link rel="stylesheet" href="css/responsive.css?v=12">
-  <link rel="stylesheet" href="css/overrides.css?v=12">
-  <script src="app.js?v=10" defer></script>
-  <script src="light.js?v=2" defer></script>
-  <script src="universe.js?v=2" defer></script>
-  <script src="tracking.js?v=9" defer></script>
-  <script src="ui-select.js?v=1" defer></script>
+  <link rel="stylesheet" href="css/tokens.css?v=16">
+  <link rel="stylesheet" href="css/controls.css?v=15">
+  <link rel="stylesheet" href="css/appbar.css?v=14">
+  <link rel="stylesheet" href="css/menu.css?v=14">
+  <link rel="stylesheet" href="css/stage.css?v=15">
+  <link rel="stylesheet" href="css/inspector.css?v=14">
+  <link rel="stylesheet" href="css/spectrum.css?v=15">
+  <link rel="stylesheet" href="css/atlas.css?v=15">
+  <link rel="stylesheet" href="css/tracker.css?v=16">
+  <link rel="stylesheet" href="css/dialogs.css?v=14">
+  <link rel="stylesheet" href="css/responsive.css?v=16">
+  <link rel="stylesheet" href="css/overrides.css?v=16">
+  <script src="app.js?v=15" defer></script>
+  <script src="light.js?v=7" defer></script>
+  <script src="universe.js?v=3" defer></script>
+  <script src="tracking.js?v=14" defer></script>
+  <script src="ui-select.js?v=2" defer></script>
 </head>
 <body>
+  <a class="skip-link" href="#sky">Skip to image</a>
+  <a class="skip-link" href="#tracker">Skip to tracker</a>
   <header class="app-bar">
     <div class="app-bar-left">
       <a href="/" class="crest" aria-label="SPHEREx Celestial Workbench home">
@@ -134,12 +136,12 @@
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"/></svg>
                 </button>
                 <select id="detector">
-                  <option value="1">D1 · 0.75–1.09 µm</option>
-                  <option value="2">D2 · 1.10–1.62 µm</option>
-                  <option value="3" selected>D3 · 1.63–2.41 µm</option>
-                  <option value="4">D4 · 2.42–3.82 µm</option>
-                  <option value="5">D5 · 3.83–4.41 µm</option>
-                  <option value="6">D6 · 4.42–5.00 µm</option>
+                  <option value="1" data-swatch="var(--d1)">D1 · 0.75–1.09 µm</option>
+                  <option value="2" data-swatch="var(--d2)">D2 · 1.10–1.62 µm</option>
+                  <option value="3" data-swatch="var(--d3)" selected>D3 · 1.63–2.41 µm</option>
+                  <option value="4" data-swatch="var(--d4)">D4 · 2.42–3.82 µm</option>
+                  <option value="5" data-swatch="var(--d5)">D5 · 3.83–4.41 µm</option>
+                  <option value="6" data-swatch="var(--d6)">D6 · 4.42–5.00 µm</option>
                 </select>
                 <button type="button" id="detector-next" class="static" aria-label="Next detector">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
@@ -165,7 +167,7 @@
                 <span class="summary-label">
                   <span>Date filter</span>
                 </span>
-                <span id="source-state">UTC · Auto</span>
+                <span id="source-state" class="summary-meta">UTC · Auto</span>
               </summary>
               <div class="date-filter">
                 <span id="coordinate-help">Deg or h:m:s</span>
@@ -179,7 +181,7 @@
 
       <div class="workbench">
         <section class="stage" aria-labelledby="field-title">
-          <div class="stage-title sr-only">
+          <div class="stage-title">
             <h1 id="field-title">Vesta</h1>
             <p class="coord-sub" id="field-type"></p>
           </div>
@@ -221,8 +223,8 @@
             <div id="viewers" class="viewers" aria-busy="false">
               <div id="view-message" class="view-message" hidden role="status"></div>
               <div class="image-pane" id="primary-pane">
-                <canvas id="sky" tabindex="0" aria-label="Aligned sky image. Click to inspect a pixel, drag to pan, or use the zoom control."></canvas>
-                <span class="hud-badge hud-bl" id="frame-caption">Loading</span>
+                <canvas id="sky" tabindex="0" aria-label="Aligned sky image. Click to inspect a pixel, drag to pan, or use the zoom control. With focus, arrow keys to move, Enter to inspect."></canvas>
+                <span class="hud-badge hud-bl has-swatch" id="frame-caption">Loading</span>
                 <span class="hud-badge hud-tl compass" aria-label="Orientation North up, East left">
                   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M13 13V4.5M10.8 6.7L13 4.5l2.2 2.2M13 13H4.5M6.7 10.8L4.5 13l2.2 2.2"/></svg>
                   <span>N↑ E←</span>
@@ -231,8 +233,8 @@
                 <span class="hud-badge hover-flag-badge" id="hover-flag-badge" hidden></span>
               </div>
               <div class="image-pane" id="reference-pane" hidden>
-                <canvas id="reference" tabindex="0" aria-label="Reference sky image"></canvas>
-                <span class="hud-badge hud-bl" id="reference-caption"></span>
+                <canvas id="reference" tabindex="0" aria-label="Reference sky image. With focus, arrow keys to move, Enter to inspect."></canvas>
+                <span class="hud-badge hud-bl has-swatch" id="reference-caption"></span>
                 <span class="hud-badge hud-tl compass">N↑ E←</span>
               </div>
             </div>
@@ -274,7 +276,7 @@
               <span id="baseline">TIMELINE</span>
               <label>Compare <select id="reference-date"></select></label>
             </div>
-            <div class="filmstrip" id="filmstrip"></div>
+            <div class="filmstrip" id="filmstrip" role="toolbar" aria-label="Observation frames. Arrow keys to move, Enter to open."></div>
           </div>
 
           <div class="stage-notes">
@@ -305,7 +307,7 @@
                 <select id="light-scope">
                   <option value="near">±7 days</option>
                   <option value="dates">Viewer dates</option>
-                  <option value="all">All dates</option>
+                  <option value="all">All dates · slow</option>
                 </select>
               </label>
               <label title="Reference redshift z">z
@@ -346,8 +348,16 @@
               </div>
 
               <div class="plot-wrap">
-                <svg id="light-chart" viewBox="0 0 1000 390" role="img" aria-label="Measured light with error bars"></svg>
+                <svg id="light-chart" viewBox="0 0 1000 390" role="group" aria-label="Measured light with error bars"></svg>
               </div>
+              <ul class="band-legend" aria-label="Point colour is the detector band">
+                <li class="has-swatch" style="--swatch: var(--d1)">D1 0.75–1.09 µm</li>
+                <li class="has-swatch" style="--swatch: var(--d2)">D2 1.10–1.62</li>
+                <li class="has-swatch" style="--swatch: var(--d3)">D3 1.63–2.41</li>
+                <li class="has-swatch" style="--swatch: var(--d4)">D4 2.42–3.82</li>
+                <li class="has-swatch" style="--swatch: var(--d5)">D5 3.83–4.41</li>
+                <li class="has-swatch" style="--swatch: var(--d6)">D6 4.42–5.00</li>
+              </ul>
               <p id="plot-note" class="plot-note"></p>
 
               <div class="candidate-heading">
@@ -371,7 +381,7 @@
         </section>
 
         <aside class="inspector" aria-label="Details">
-          <div class="vesta-callout inspector-section">
+          <div id="vesta-callout" class="vesta-callout inspector-section">
             <p id="target-note" class="callout-banner" hidden></p>
             <button id="vesta-example" type="button" class="btn-ghost example-shortcut" hidden>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v3l2 1.5"/></svg>
@@ -383,8 +393,8 @@
           <section class="inspector-section inspector-card" aria-label="Observation and pixel inspector">
             <div class="inspector-top">
               <div class="tabs" role="tablist">
-                <button id="tab-observation" type="button" role="tab" class="static" aria-selected="true">Observation</button>
-                <button id="tab-pixel" type="button" role="tab" class="static" aria-selected="false">Pixel</button>
+                <button id="tab-observation" type="button" role="tab" class="static" aria-selected="true" aria-controls="observation-panel" tabindex="0">Observation</button>
+                <button id="tab-pixel" type="button" role="tab" class="static" aria-selected="false" aria-controls="pixel-panel" tabindex="-1">Pixel</button>
               </div>
               <div class="inspector-util-btns">
                 <button id="share" type="button" class="btn-outline btn-compact" title="Copy view URL">Link</button>
@@ -392,7 +402,7 @@
               </div>
             </div>
 
-            <div id="observation-panel" role="tabpanel">
+            <div id="observation-panel" role="tabpanel" aria-labelledby="tab-observation">
               <div class="obs-banner">
                 <div>
                   <h2 id="observation-date">—</h2>
@@ -415,7 +425,7 @@
               </div>
 
               <dl id="metadata" class="kv-grid"></dl>
-              <div class="quality-card" id="quality-card"></div>
+              <button type="button" class="quality-card" id="quality-card"></button>
 
               <details class="hash-details">
                 <summary>SHA-256</summary>
@@ -425,7 +435,7 @@
               </details>
             </div>
 
-            <div id="pixel-panel" role="tabpanel" hidden>
+            <div id="pixel-panel" role="tabpanel" aria-labelledby="tab-pixel" hidden>
               <div class="pixel-guide-hint">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="8" stroke-opacity="0.35"/>
@@ -442,7 +452,7 @@
             </div>
           </section>
 
-          <div class="tracking-bar inspector-section">
+          <div class="tracking-bar inspector-section" id="tracker" tabindex="-1">
             <div class="tracking-head">
               <div class="tracking-title-row">
                 <h2 class="section-title">Motion tracker</h2>
@@ -451,8 +461,9 @@
               <p id="track-status" role="status">Click a star or asteroid, then track its path.</p>
             </div>
             <label class="track-object" for="track-object">Solar System object (optional, uses JPL Horizons)
-              <input id="track-object" type="text" placeholder="Vesta, 4, 433 Eros" autocomplete="off" spellcheck="false">
+              <input id="track-object" type="text" placeholder="Vesta, 4, 433 Eros" autocomplete="off" spellcheck="false" aria-describedby="track-object-note">
             </label>
+            <p id="track-object-note" class="track-object-note" hidden></p>
             <div class="tracking-actions">
               <button id="track-star" type="button" class="btn-brass">Track point</button>
               <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false" title="Needs a clicked point first. Then step to another frame and click the moving object to anchor its path.">Pick 2nd</button>
@@ -461,12 +472,12 @@
             </div>
             <p id="track-help" class="track-help">Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.</p>
             <div id="track-result" hidden>
-              <div id="track-eph" class="track-eph" hidden>
-                <p id="track-source" class="track-source"></p>
-                <p id="track-timescale"></p>
-                <ul id="track-warnings" class="track-warnings"></ul>
-                <p id="track-offset"></p>
-                <p id="track-flag" class="track-flag" role="alert" hidden></p>
+              <div id="track-verdict" class="track-verdict">
+                <p id="verdict-head" class="verdict-head"></p>
+                <dl id="verdict-compare" class="verdict-compare" hidden>
+                  <dt>Measured</dt><dd id="verdict-m-speed"></dd><dd id="verdict-m-head"></dd>
+                  <dt class="jpl">JPL</dt><dd id="verdict-p-speed" class="jpl"></dd><dd id="verdict-p-head" class="jpl"></dd>
+                </dl>
               </div>
               <div id="track-kpis" class="track-kpis">
                 <div class="track-kpi"><span>Speed</span><strong id="kpi-speed">—</strong><small id="kpi-speed-pred"></small></div>
@@ -474,9 +485,19 @@
                 <div class="track-kpi"><span>Change</span><strong id="kpi-change">—</strong></div>
                 <div class="track-kpi"><span>Measured</span><strong id="kpi-points">—</strong></div>
               </div>
+              <div id="track-eph" class="track-eph" hidden>
+                <ul id="track-warnings" class="track-warnings"></ul>
+                <p id="track-offset"></p>
+                <p id="track-flag" class="track-flag" role="alert" hidden></p>
+                <details>
+                  <summary>Source &amp; timescale</summary>
+                  <p id="track-source" class="track-source"></p>
+                  <p id="track-timescale"></p>
+                </details>
+              </div>
               <div class="track-charts">
-                <svg id="track-plot" viewBox="0 0 400 180" role="img" aria-label="Measured sky trajectory relative to the reference observation"></svg>
-                <svg id="track-change-plot" viewBox="0 0 400 150" role="img" aria-label="Cumulative path and interval speed over time"></svg>
+                <svg id="track-plot" viewBox="0 0 400 180" role="group" aria-label="Measured sky trajectory relative to the reference observation"></svg>
+                <svg id="track-change-plot" viewBox="0 0 400 150" role="group" aria-label="Cumulative path and interval speed over time"></svg>
               </div>
               <p id="track-summary"></p>
               <div class="track-result-actions">

@@ -73,6 +73,7 @@
 
     function sync() {
       valueEl.textContent = select.selectedOptions[0]?.text ?? "";
+      swatch(valueEl, select.selectedOptions[0]);
       trigger.disabled = select.disabled;
       wrapper.hidden = select.hidden;
       if (select.disabled && isOpen()) menu.hidePopover();
@@ -95,6 +96,7 @@
         row.setAttribute("aria-selected", String(index === select.selectedIndex));
         row.dataset.index = index;
         row.textContent = option.text;
+        swatch(row, option);
         frag.append(row);
       }
       if (!matches.length) frag.append(note("No matches"));
@@ -102,6 +104,13 @@
       list.replaceChildren(frag);
       const selectedRow = rows.indexOf(select.selectedIndex);
       setActive(query ? 0 : selectedRow >= 0 ? selectedRow : 0);
+    }
+
+    // An option with data-swatch shows that colour as a dot before its label (tokens.css .has-swatch)
+    function swatch(el, option) {
+      const color = option?.dataset.swatch;
+      el.classList.toggle("has-swatch", !!color);
+      el.style.setProperty("--swatch", color || "");
     }
 
     function note(text) {

@@ -1,8 +1,37 @@
-/* Arrival of new content: a short fade, nothing else moves on its own. */
+/* Motion. Authored moments: a fetched view comes into focus, a new target's name wipes in, a finished track draws on.
+   Playback and revisited views switch instantly, so frame-to-frame blinking stays honest. */
 @keyframes soft-fade { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; translate: 0 4px; } }
+@keyframes focus-in { from { opacity: 0.35; filter: blur(6px); } }
+@keyframes wipe-in { from { clip-path: inset(0 100% 0 0); } }
+@keyframes draw-on { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
 @media (prefers-reduced-motion: no-preference) {
-  .viewers.resolve canvas { animation: soft-fade 200ms var(--ease-out) both; }
+  :root { interpolate-size: allow-keywords; }
+
+  .viewers.resolve canvas { animation: focus-in 450ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .stage-title.arrive h1 { animation: wipe-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .stage-title.arrive .coord-sub { animation: soft-fade 300ms var(--ease-out) 150ms both; }
+
   #track-result:not([hidden]), .path-card { animation: rise-in var(--t-menu) var(--ease-out) both; }
+
+  /* A finished track: the measured trace and JPL's prediction draw on together, and the verdict wipes in.
+     Both start the moment the result arrives; nothing waits on the flourish. */
+  #track-plot .trace { stroke-dasharray: 1; animation: draw-on 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  #track-result:not([hidden]) .verdict-head { animation: wipe-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+  /* Each pixel click's result arrives visibly */
+  #pixel-result > * { transition: opacity var(--t-menu) var(--ease-out); }
+  @starting-style { #pixel-result > * { opacity: 0; } }
+
+  /* Disclosure rows open by height; closing is faster than opening. The date filter floats, so it is left out. */
+  details:not(.query-disclosure)::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition: block-size 150ms var(--ease-out), content-visibility 150ms allow-discrete;
+  }
+  details:not(.query-disclosure)[open]::details-content {
+    block-size: auto;
+    transition-duration: 220ms;
+  }
 }

@@ -111,6 +111,14 @@ function drawClick(ctx, x, y) {
   ctx.stroke();
 }
 
+// Keyboard crosshair: chrome focus colour, not a data colour, so it never reads as a measurement.
+function drawCursor(ctx, x, y) {
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--focus").trim() || "#fff";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x-6,y-6,12,12);
+  ctx.beginPath(); ctx.moveTo(x-1,y); ctx.lineTo(x+1,y); ctx.moveTo(x,y-1); ctx.lineTo(x,y+1); ctx.stroke();
+}
+
 const legendGlyphs = {
   center: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M4 11h14M11 4v14" stroke="#d9d4c8" stroke-opacity=".8" stroke-width="1" fill="none"/></svg>',
   click: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><path d="M11 3v5M11 14v5M3 11h5M14 11h5" stroke="#6cb8ff" stroke-width="1.6" fill="none"/></svg>',
@@ -175,6 +183,7 @@ async function paint(canvas, frame, version) {
     if (at) drawTarget(ctx,left+at[0]*side,top+at[1]*side);
   }
   if (state.point) drawClick(ctx,left+state.point.x*side,top+state.point.y*side);
+  if (state.cursor?.id === canvas.id) drawCursor(ctx,left+state.cursor.x*side,top+state.cursor.y*side);
   if (typeof StarTracker !== "undefined") StarTracker.paint(ctx, frame, {side,left,top});
 }
 
@@ -216,6 +225,8 @@ function renderComparison() {
     : (waves.length ? `${Math.min(...waves).toFixed(2)}–${Math.max(...waves).toFixed(2)} µm · ${releases}` : `Outside center · ${releases}`);
   $("frame-caption").textContent = `${dateText(first.timestamp)} · D${first.detector}`;
   $("reference-caption").textContent = `${dateText(second.timestamp)} · D${second.detector}`;
+  $("frame-caption").style.setProperty("--swatch", `var(--d${first.detector})`);
+  $("reference-caption").style.setProperty("--swatch", `var(--d${second.detector})`);
 }
 
 function setFrame(index) {
@@ -239,7 +250,7 @@ function setFrame(index) {
   headline.textContent = `${frame.caution_fraction}% flagged`;
   const detail = document.createElement("span");
   detail.textContent = $("quality").checked ? "Overlay on · click to hide" : "Click to preview mask";
-  const chips = document.createElement("div");
+  const chips = document.createElement("span");  // span: the card is a <button>, which allows phrasing content only
   chips.className = "flag-chip-list";
   for (const item of (frame.flag_summary || []).slice(0, 4)) {
     const chip = document.createElement("span");
@@ -265,7 +276,11 @@ function setFrame(index) {
     $("vesta-next-guide").disabled = marked.length < 2;
   }
   $("scale-label").textContent = `${state.session.options.fov}′ FOV`;
-  for (const button of $("filmstrip").children) button.setAttribute("aria-current",String(Number(button.dataset.index)===index));
+  for (const button of $("filmstrip").children) {
+    const current = Number(button.dataset.index)===index;
+    button.setAttribute("aria-current",String(current));
+    button.tabIndex = current ? 0 : -1;  // roving tabindex: the strip is one tab stop
+  }
   renderComparison();
   draw();
   if (state.point) inspect(state.point, index);
@@ -315,8 +330,14 @@ function sessionReady(session, request) {
   state.hoverCache.clear();
   if ($("hover-flag-badge")) $("hover-flag-badge").hidden = true;
   $("pixel-result").replaceChildren();
+  if ($("field-title").textContent !== state.title) {
+    // A new target: replay the name's entrance (first load keeps the same name, so nothing moves on page load)
+    const title = $("field-title").parentElement;
+    title.classList.remove("arrive"); void title.offsetWidth; title.classList.add("arrive");
+  }
   $("field-title").textContent = state.title;
-  $("field-type").textContent = `${session.options.ra.toFixed(4)}°, ${session.options.dec.toFixed(4)}°`;
+  const category = state.library?.fields?.find(item => item.key === state.field)?.category;
+  $("field-type").textContent = `${category ? `${category} · ` : ""}${session.options.ra.toFixed(4)}°, ${session.options.dec.toFixed(4)}°`;
   syncSwitcher();
   $("timeline").max = Math.max(0, session.frames.length-1);
   $("filmstrip").replaceChildren();
@@ -325,6 +346,7 @@ function sessionReady(session, request) {
     const button = document.createElement("button");
     button.className = "frame-button";
     button.dataset.index = index;
+    button.tabIndex = index===state.index ? 0 : -1;
     button.setAttribute("aria-label",`Open observation ${dateText(frame.timestamp)}`);
     const img = document.createElement("img"); img.src = frame.preview; img.alt = ""; img.loading = "lazy";
     const caption = document.createElement("span"); caption.className = "frame-copy";
@@ -383,7 +405,8 @@ function sessionReady(session, request) {
     $("observation-date").textContent = "No frames"; $("observation-time").textContent = "";
     if ($("frame-counter")) $("frame-counter").textContent = "Frame 0 / 0";
     $("baseline").textContent = "0 frames"; $("comparison-note").textContent = session.empty_reason || "No matches";
-    $("frame-caption").textContent = ""; $("reference-caption").textContent = ""; $("scale-label").textContent = "";
+    $("frame-caption").textContent = ""; $("reference-caption").textContent = "";
+    $("frame-caption").style.removeProperty("--swatch"); $("reference-caption").style.removeProperty("--swatch"); $("scale-label").textContent = "";
     updateLegend();
     $("fits-link").removeAttribute("href"); $("source-link").hidden = true; $("context-button").hidden = true;
     $("provenance").textContent = ""; $("checksum").textContent = "";
@@ -531,6 +554,7 @@ for (const name of ["start","end"]) $(name).onchange = () => search();
 function selectTab(name) {
   for (const tab of ["observation","pixel"]) {
     $(`tab-${tab}`).setAttribute("aria-selected",String(name===tab));
+    $(`tab-${tab}`).tabIndex = name===tab ? 0 : -1;
     $(`${tab}-panel`).hidden = name!==tab;
   }
 }
@@ -668,14 +692,34 @@ for (const id of ["sky","reference"]) {
       const hit = id === "sky" && typeof StarTracker !== "undefined"
         ? StarTracker.pick(event.clientX-rect.left, event.clientY-rect.top, view) : null;
       if (hit) StarTracker.open(hit);
-      else if (x>=0 && x<1 && y>=0 && y<1) {
-        stop(); state.point = {x,y}; selectTab("pixel");
-        inspect(state.point,id === "sky" ? state.index : state.reference); draw(); updateLegend();
-      }
+      else if (x>=0 && x<1 && y>=0 && y<1) pickPixel(id, x, y);
     }
     drag = null;
   });
   canvas.addEventListener("pointercancel", () => { drag = null; });
+  // stage.css lets a finger scroll the page over the image (touch-action: pan-y); once zoomed, keep the touch for panning.
+  canvas.addEventListener("touchstart", event => { if (state.zoom > 1) event.preventDefault(); }, {passive: false});
+  canvas.addEventListener("keydown", event => {
+    if (!state.session?.frames.length) return;
+    const step = (event.shiftKey ? 10 : 1) / Math.ceil(state.session.options.fov*60/6.15);  // 1 native 6.15″ pixel, as science.py grids it
+    const move = {ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
+    const from = state.cursor?.id === id ? state.cursor : (state.point || {x:.5,y:.5});
+    if (move) {
+      const clamp = v => Math.min(1-1e-6, Math.max(0, v));
+      state.cursor = {id, x:clamp(from.x+move[0]*step), y:clamp(from.y+move[1]*step)};
+    } else if (event.key === "Enter" || event.key === " ") {
+      if (state.cursor?.id !== id) state.cursor = {id, x:from.x, y:from.y};  // first press shows the crosshair
+      else { pickPixel(id, from.x, from.y); status("Pixel selected"); }
+    } else if (event.key === "Escape" && state.cursor) state.cursor = null;
+    else return;
+    event.preventDefault(); draw();
+  });
+  canvas.addEventListener("blur", () => { if (state.cursor?.id === id) { state.cursor = null; draw(); } });
+}
+
+function pickPixel(id, x, y) {
+  stop(); state.point = {x,y}; selectTab("pixel");
+  inspect(state.point,id === "sky" ? state.index : state.reference); draw(); updateLegend();
 }
 
 function download(filename, text, type) {
@@ -834,6 +878,24 @@ for (const id of ["markers","quality","tint"]) $(id).onchange = () => {
 $("zoom").oninput = () => { state.zoom = Number($("zoom").value); $("zoom-value").textContent = state.zoom.toFixed(1)+"×"; draw(); };
 $("reset-view").onclick = resetView;
 for (const tab of ["observation","pixel"]) $("tab-"+tab).onclick = () => selectTab(tab);
+$("tab-observation").parentElement.addEventListener("keydown", event => {
+  const tabs = ["observation","pixel"], current = tabs.indexOf(event.target.id.replace("tab-",""));
+  const next = {ArrowLeft:current-1,ArrowRight:current+1,Home:0,End:tabs.length-1}[event.key];
+  if (current < 0 || next === undefined) return;
+  event.preventDefault();
+  const name = tabs[(next+tabs.length)%tabs.length];
+  selectTab(name); $("tab-"+name).focus();
+});
+// Filmstrip arrows move focus only; Enter/Space open the frame through the button's own click.
+$("filmstrip").addEventListener("keydown", event => {
+  const buttons = [...$("filmstrip").children], current = buttons.indexOf(event.target);
+  const next = {ArrowLeft:current-1,ArrowRight:current+1,Home:0,End:buttons.length-1}[event.key];
+  if (current < 0 || next === undefined) return;
+  event.preventDefault();  // also keeps the global playback arrows from firing
+  const target = buttons[Math.max(0, Math.min(buttons.length-1, next))];
+  for (const button of buttons) button.tabIndex = button === target ? 0 : -1;
+  target.focus();
+});
 // The popover lives in the top layer; pin it under its button each time it opens.
 $("target-popover")?.addEventListener("beforetoggle", event => {
   if (event.newState !== "open") return;
@@ -866,7 +928,7 @@ $("fits-files").onchange = async event => {
   finally { $("fits-files").disabled = false; $("fits-files").value = ""; await library(); }
 };
 document.addEventListener("keydown", event => {
-  if ($("observations-workspace").hidden) return;
+  if ($("observations-workspace").hidden || event.defaultPrevented) return;  // the sky canvas and tabs handle their own keys
   if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || document.querySelector("dialog[open]")) return;
   if (event.code === "Space" && document.activeElement.tagName !== "BUTTON") { event.preventDefault(); play(); }
   if (event.key === "ArrowRight") { event.preventDefault(); $("next").click(); }

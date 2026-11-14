@@ -1,8 +1,6 @@
 /* Spectrum: header, controls, result toolbar, chart well, dip checks, disclosures, records. */
 .light-panel {
-  margin-top: var(--s5);
-  padding-top: var(--s5);
-  border-top: 1px solid var(--line);
+  margin-top: var(--s7);
 }
 
 .light-head {
@@ -14,9 +12,10 @@
 }
 
 .light-panel .section-title {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .light-panel .coord-sub {
@@ -129,6 +128,19 @@
   outline-offset: 2px;
 }
 
+.band-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 .plot-note {
   margin: var(--s2) 0 0;
   font-size: 12px;
@@ -188,47 +200,25 @@
   color: var(--muted);
 }
 
-/* Disclosure rows inside the result */
-#light-result .coverage-help {
-  margin-top: var(--s4);
-  padding: 0;
-  border-top: 1px solid var(--line);
-}
-
-#light-result .coverage-help > summary {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s3) 0;
+.candidate-summary {
+  grid-column: 1 / -1;
+  margin: 0;
   font-size: 13px;
   line-height: 20px;
   color: var(--muted);
-  list-style: none;
 }
 
-#light-result .coverage-help > summary::-webkit-details-marker {
-  display: none;
+/* Disclosure rows inside the result */
+#light-result .coverage-help {
+  border-top: 1px solid var(--line);
 }
 
-#light-result .coverage-help > summary::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  rotate: -45deg;
-  transition: rotate var(--t-fast) var(--ease-out);
+#light-result .coverage-help:first-of-type {
+  margin-top: var(--s5);
 }
 
-#light-result .coverage-help[open] > summary::before {
-  rotate: 45deg;
-}
-
-#light-result .coverage-help p {
-  margin: 0 0 var(--s3);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted);
+#light-result .coverage-help:last-of-type {
+  border-bottom: 1px solid var(--line);
 }
 
 #light-sources {

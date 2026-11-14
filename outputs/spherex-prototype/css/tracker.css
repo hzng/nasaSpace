@@ -79,10 +79,94 @@
 }
 
 .tracking-bar .track-eph .track-source {
+  color: var(--text);
+}
+
+.tracking-bar .track-eph details {
+  margin-top: var(--s2);
+}
+
+/* Verdict: the demo's payoff, set in the same display type as the observation date */
+.track-verdict {
+  display: grid;
+  gap: var(--s3);
+  padding-bottom: var(--s2);
+}
+
+.tracking-bar .verdict-head {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+
+/* Sample size, one line under the claim; amber with a "Low confidence" prefix when few frames back it */
+.verdict-sample {
+  display: block;
+  margin-top: var(--s1);
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.verdict-head.low .verdict-sample {
+  color: var(--warning);
+}
+
+.tracking-bar .track-object-note {
+  margin: calc(var(--s2) * -1) 0 var(--s3);
+  color: var(--muted);
+}
+
+.tracking-bar .verdict-head.pending {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.verdict-compare {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  column-gap: var(--s4);
+  row-gap: var(--s1);
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-compare dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.verdict-compare dd {
+  margin: 0;
+  font-weight: 600;
   color: var(--text);
+}
+
+.verdict-compare dd + dd {
+  font-weight: 400;
+}
+
+/* JPL's numbers wear the prediction colour the plot uses for its dashed path */
+.verdict-compare .jpl {
+  color: var(--predict);
+}
+
+/* The comparison above already shows speed and heading */
+.track-kpis.compared .track-kpi:has(#kpi-speed, #kpi-heading) {
+  display: none;
 }
 
 .track-warnings {
@@ -187,8 +271,7 @@
 }
 
 #track-result details {
-  font-size: 12px;
-  color: var(--muted);
+  border-top: 1px solid var(--line);
 }
 
 /* Predicted path info card: floats over the image, clear of the top strip and the playback bar */

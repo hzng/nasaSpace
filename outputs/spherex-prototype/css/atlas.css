@@ -87,6 +87,11 @@
   color: var(--text);
 }
 
+.atlas-context,
+#atlas-browser-note {
+  text-wrap: pretty;
+}
+
 .atlas-context {
   margin: calc(var(--s1) * -1) 0 0;
   padding: 0;
@@ -392,18 +397,10 @@
 }
 
 #universe-workspace .universe-notes-wrap {
-  padding: 0;
-  border: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-#universe-workspace .universe-notes-wrap summary {
-  padding: var(--s1) 0;
+  border-top: 1px solid var(--line);
 }
 
 #universe-notes {
-  margin-top: var(--s2);
   padding: 0;
   border: 0;
   background: none;

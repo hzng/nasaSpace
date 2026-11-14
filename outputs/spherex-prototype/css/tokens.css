@@ -3,26 +3,29 @@
   color-scheme: dark;
 
   /* Surfaces */
-  --bg: #0b0c0e;
-  --panel: #121316;
-  --surface: #191b1f;
-  --surface-hover: #212328;
-  --canvas-bg: #060709;
+  --bg: #000000;
+  --panel: #161617;
+  --surface: #1d1d1f;
+  --surface-hover: #262628;
+  --canvas-bg: #000000;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.16);
   --line-hover: rgba(255, 255, 255, 0.28);
 
   /* Text */
-  --text: #ededef;
-  --muted: #a0a3ab;
-  --subtle: #858892;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --subtle: #86868b;
 
-  /* Neutral accent: filled primary, checked and selected states */
-  --accent: #ededef;
-  --accent-hover: #ffffff;
-  --accent-ink: #0b0c0e;
+  /* Accent: Apple-style action blue, the one chrome colour. Primary button, selected tab, mode and menu row, focus.
+     Not a canvas mark colour. White on accent 4.7:1 (hover 5.9:1); accent on panel 3.9:1, so never use it for text. */
+  --accent: #0071e3;
+  --accent-hover: #0062c4;
+  --accent-ink: #ffffff;
+  --accent-tint: rgba(0, 113, 227, 0.22);
+  /* Neutral fill for hover and pressed toggles */
   --accent-soft: rgba(255, 255, 255, 0.08);
-  --focus: #6ea8fe;
+  --focus: var(--accent);
 
   /* Meaning */
   --warning: #e5b25d;
@@ -35,6 +38,15 @@
   /* Canvas mark colours, only where the DOM repeats a mark drawn on the image */
   --sky: #6cb8ff;
   --predict: #b9a3f5;
+
+  /* SPHEREx detector bands D1–D6, short to long wavelength. The chart paints points in these (app.js `hues`
+     mirrors them); chrome repeats a band's colour as a dot wherever that band is named, never as decoration. */
+  --d1: #b798f4;
+  --d2: #84b3ef;
+  --d3: #a5edcc;
+  --d4: #ebdf82;
+  --d5: #eec083;
+  --d6: #efac99;
 
   /* Type */
   --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -112,8 +124,24 @@ body {
 }
 
 ::selection {
-  background: rgba(110, 168, 254, 0.35);
+  background: rgba(0, 113, 227, 0.45);
   color: var(--text);
+}
+
+/* A band's colour dot before its name; the element sets --swatch to var(--dN) */
+.has-swatch::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--swatch);
+  vertical-align: 0;
+}
+
+.has-swatch:not([style*="--swatch"])::before {
+  display: none;
 }
 
 h1, h2, h3 {

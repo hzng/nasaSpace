@@ -43,12 +43,30 @@
     padding: 0; background: none; box-shadow: none; scrollbar-width: none;
   }
   .viewer-bar > * { flex: none; }
+  /* Edge fades show controls lie off-screen: the scroll position drives them, so a strip that fits shows none */
+  @supports (animation-timeline: scroll()) {
+    .viewer-bar {
+      mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+      animation: viewer-bar-fade linear both;
+      animation-timeline: scroll(self inline);
+      animation-duration: auto !important; /* scroll-linked, not motion: survives the reduced-motion reset in tokens.css */
+    }
+  }
   /* Playback is one compact row under the image. */
   .transport {
     position: static; width: auto; margin: var(--s2) 0 0; padding: 0; flex-wrap: wrap;
     background: none; box-shadow: none; gap: var(--s2);
   }
   .frame-counter { margin-left: auto; min-width: 0; }
+}
+
+/* Registered so the strip's edge fades interpolate with scroll; 0 (no fade) while the strip fits */
+@property --fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes viewer-bar-fade {
+  from { --fade-start: 0px; --fade-end: var(--s6); }
+  10%, 90% { --fade-start: var(--s6); --fade-end: var(--s6); }
+  to { --fade-start: var(--s6); --fade-end: 0px; }
 }
 
 /* Touch sizes: the token is 40 px here, so the compact controls follow it. */
@@ -58,7 +76,6 @@
   .stepper { margin-block: -1px; }
   .stepper > button { width: var(--control-h); min-width: var(--control-h); }
   .main-modes button { height: var(--control-h); }
-  summary { min-height: var(--control-h); }
   .filmstrip button, .filmstrip [role=button] { min-height: var(--control-h); }
 }
 
@@ -76,6 +93,8 @@
   .query-fields > .coord-field { flex-basis: calc(50% - var(--s1)); }
   .query-fields > .input-group:not(.coord-field) { flex-basis: 100%; }
   .kv-grid { grid-template-columns: 1fr; }
+  /* 2 × 2 so Clear never sits alone on a third row */
+  .tracking-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .viewers.split { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); height: calc(2 * min(100vw - 24px, 70vh / 2 * 1.6)); }
   .viewers.split .image-pane:first-child { border-bottom: 1px solid var(--line); }
   .path-card, .path-card.dot-right, .path-card.dot-top { top: auto; right: var(--s2); left: var(--s2); bottom: var(--s2); width: auto; max-height: 70%; }
