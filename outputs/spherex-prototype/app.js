@@ -396,7 +396,8 @@ function sessionReady(session, request) {
     $("provenance").textContent = ""; $("checksum").textContent = "";
   }
   const countText = session.archive_matches == null ? `${session.frames.length} frames` : `${session.frames.length} / ${session.archive_matches} frames`;
-  status(`${countText}${session.failures.length ? ` · ${session.failures.length} errors` : ""}`);
+  const capText = session.limited ? ` · evenly spaced from ${session.matched_frames}` : "";
+  status(`${countText}${capText}${session.failures.length ? ` · ${session.failures.length} errors` : ""}`);
   $("source-state").textContent = `Synced ${new Date(session.created_utc).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`;
   const url = new URL(location.href);
   for (const key of ["ra","dec","fov","detector","start","end"]) {
@@ -443,6 +444,7 @@ async function search(source="saved") {
   state.pending = request;
   stop();
   ++state.drawVersion;
+  $("metadata").replaceChildren(); $("quality-card").replaceChildren();  // the old frame's band must not show beside the new choice
   $("viewers").setAttribute("aria-busy","true");
   $("view-message").hidden = false;
   $("view-message").textContent = `Loading ${request.options.fov}′ D${request.options.detector}`;

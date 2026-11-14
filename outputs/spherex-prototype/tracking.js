@@ -297,7 +297,9 @@ const StarTracker = (() => {
 
   function paint(ctx,frame,{side,left,top}){
     // Name the clicked source next to the click, on the frame it was identified in (a moving object is elsewhere on other frames)
-    if(identity&&!cur()&&frame.index===identity.frame)markLabel(ctx,identity.name,left+identity.x*side+14,top+identity.y*side-16,'#6cb8ff');
+    // Inside the saved target's gold box (±21 px) the box already names it
+    const at=identity&&$("markers").checked&&targetAt(frame), boxed=at&&Math.abs(at[0]-identity.x)*side<21&&Math.abs(at[1]-identity.y)*side<21;
+    if(identity&&!boxed&&!cur()&&frame.index===identity.frame)markLabel(ctx,identity.name,left+identity.x*side+14,top+identity.y*side-16,'#6cb8ff');
     if(!result||result.session!==state.session?.id)return;
     const p=result.points.find(pt=>pt.index===frame.index);if(!p)return;
     const ordered=result.points.filter(v=>v.accepted).sort((a,b)=>a.mjd-b.mjd);

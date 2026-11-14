@@ -73,6 +73,9 @@ def _fetch(designation, jd_utc_list, cache_dir):
     command = designation.strip()
     if not re.fullmatch(r'[A-Za-z0-9 /.()\-]+;?', command):  # also keeps quotes out of the Horizons command
         raise EphemerisError('"%s" is not a valid object designation.' % command)
+    periodic = re.fullmatch(r'(\d+P)(/.*)?;?', command, re.I)
+    if periodic:  # Horizons lists every return of a periodic comet; CAP picks the one nearest today, NOFRAG drops fragments
+        command = 'DES=%s;CAP;NOFRAG' % periodic.group(1).upper()
     command += '' if command.endswith(';') else ';'
     keys = ['%.9f' % jd for jd in jd_utc_list]
     requested = False
@@ -126,6 +129,8 @@ if __name__ == '__main__':
     assert fetch('Vesta', jds, tmp)['from_cache'] is True
     a, b = fetch('Ceres', jds, tempfile.mkdtemp())['rows'], fetch('Ceres', jds[::-1], tempfile.mkdtemp())['rows']
     assert a[0]['ra'] == b[1]['ra'] != a[1]['ra'] == b[0]['ra'], (a, b)  # a descending request keeps each epoch's row
+    for name in ('29P', '29P/Schwassmann-Wachmann 1'):  # SkyBoT names it '29P'; a typed name may carry the full title
+        assert fetch(name, jds, tmp)['object'].startswith('29P/Schwassmann'), name
     for name, want in (('Notarealrock', 'Notarealrock'), ('Halley', 'Record'), ('Vesta!', 'not a valid')):
         try:
             fetch(name, jds, tmp)
