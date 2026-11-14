@@ -173,6 +173,12 @@ async function paint(canvas, frame, version) {
     drawCenter(ctx,left+.5*side,top+.5*side);
     const at = targetAt(frame);
     if (at) drawTarget(ctx,left+at[0]*side,top+at[1]*side);
+    // Vesta crosses this fixed patch in under a day: say where it went instead of drawing nothing
+    else if (state.field === "vesta" && !frame.marker && !(typeof StarTracker !== "undefined" && Object.keys(StarTracker.kinds()).length)) {
+      const days = [...new Set(state.session.frames.filter(f => f.marker).map(f => dateText(f.timestamp)))];
+      markLabel(ctx, "Vesta is not in this frame", left+12, top+66, "#eab354");
+      markLabel(ctx, days.length ? `It crosses this patch on ${days.join(" and ")}` : "No frame in this band shows it. Try D3 or D6.", left+12, top+82, "#eab354");
+    }
   }
   if (state.point) drawClick(ctx,left+state.point.x*side,top+state.point.y*side);
   if (typeof StarTracker !== "undefined") StarTracker.paint(ctx, frame, {side,left,top});
