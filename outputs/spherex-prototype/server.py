@@ -52,6 +52,7 @@ SESSIONS = json.loads(SESSION_INDEX.read_text()) if SESSION_INDEX.exists() else 
 VIEW_INDEX = CACHE / 'view-index'
 VIEW_INDEX.mkdir(exist_ok=True)
 CACHE_LIMIT = float(os.environ.get('SPHEREX_CACHE_GB', 2)) * 1e9
+MAX_FRAMES = 120  # per view; the busiest saved target other than R Draconis has 97
 
 
 def atomic_json(path, data):
@@ -283,6 +284,13 @@ def create_session(job_id, payload):
         dedup = {}
         for record in sorted(records, key=lambda r: (r.get('processed_mjd', 0), r['release'], r.get('file_bytes', 0)), reverse=True):
             dedup.setdefault((record['id'], record['detector']), record)
+        # Near the ecliptic poles SPHEREx looks every orbit (R Draconis: ~520 frames per band, enough to fill the cache
+        # alone), so a view keeps MAX_FRAMES spread evenly in time, first and last included
+        matched = len(dedup)
+        limited = matched > MAX_FRAMES
+        if limited:
+            ordered = sorted(dedup.items(), key=lambda item: item[1]['mjd'])
+            dedup = dict(ordered[round(i * (matched - 1) / (MAX_FRAMES - 1))] for i in range(MAX_FRAMES))
         key = session_key(options, list(dedup.values()))
         cached_id = SESSIONS.get(key)
         if (VIEW_INDEX / f'{key}.json').exists():
@@ -336,7 +344,6 @@ def create_session(job_id, payload):
                         prepared.append(frame)
             except Exception as error:
                 failures.append(f"{record['id']}: {error}")
-        limited = False
         units = {item[2]['unit'] for item in prepared}
         if len(units) > 1:
             raise ValueError('These images have different units and cannot share a display scale.')
@@ -351,7 +358,7 @@ def create_session(job_id, payload):
             frames.append(meta)
         manifest = {'id': job_id, 'pipeline': PIPELINE, 'created_utc': Time.now().isot+'Z',
                     'options': options, 'size': size, 'frames': frames, 'stretch': stretch,
-                    'archive_matches': archive_total, 'limited': limited, 'failures': failures,
+                    'archive_matches': archive_total, 'limited': limited, 'matched_frames': matched, 'failures': failures,
                     'wider_views': wider_views,
                     'excluded_frames': excluded,
                     'coverage_policy': {'minimum_footprint_percent': 99, 'minimum_valid_pixels_percent': 80},
