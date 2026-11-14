@@ -17,10 +17,10 @@
   <link rel="stylesheet" href="css/dialogs.css?v=12">
   <link rel="stylesheet" href="css/responsive.css?v=12">
   <link rel="stylesheet" href="css/overrides.css?v=12">
-  <script src="app.js?v=13" defer></script>
+  <script src="app.js?v=15" defer></script>
   <script src="light.js?v=2" defer></script>
   <script src="universe.js?v=2" defer></script>
-  <script src="tracking.js?v=9" defer></script>
+  <script src="tracking.js?v=10" defer></script>
   <script src="ui-select.js?v=1" defer></script>
 </head>
 <body>
@@ -450,7 +450,7 @@
               </div>
               <p id="track-status" role="status">Click a star or asteroid, then track its path.</p>
             </div>
-            <label class="track-object" for="track-object">Solar System object (optional, uses JPL Horizons)
+            <label class="track-object" for="track-object">Object (named from your click; asteroids and comets use JPL Horizons)
               <input id="track-object" type="text" placeholder="Vesta, 4, 433 Eros" autocomplete="off" spellcheck="false">
             </label>
             <div class="tracking-actions">
@@ -485,7 +485,7 @@
               </div>
               <details>
                 <summary>Method &amp; limits</summary>
-                <p>Measures native-pixel 2D Gaussian centroids (with unsaturated wing fallback on bright or saturated cores). Matches Gaia DR3 when unique, follows archived ephemerides for Solar System objects like Vesta, or uses an optional 2nd-frame anchor for custom moving objects. Click any point or speed bar to jump frames.</p>
+                <p>Measures native-pixel 2D Gaussian centroids (with unsaturated wing fallback on bright or saturated cores). Matches Gaia DR3 when unique, follows archived ephemerides for Solar System objects like Vesta, or uses an optional 2nd-frame anchor for custom moving objects. A clicked source is named when IMCCE SkyBoT (asteroids, comets) or SIMBAD (stars, moved by proper motion to the frame date) lists an object within one SPHEREx pixel (6.15″) of its measured centroid; that is a positional match, not proof. Click any point or speed bar to jump frames.</p>
               </details>
             </div>
           </div>

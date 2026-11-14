@@ -512,7 +512,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with LOCK:
                     job = JOBS.get(job_id)
                 return self.json_response(job or {'error': 'Job not found'}, 200 if job else 404)
-            if parsed.path == '/api/pixel':
+            if parsed.path in ('/api/pixel', '/api/identify'):
                 args = {k: v[0] for k, v in parse_qs(parsed.query).items()}
                 session = args['session']
                 if not re.fullmatch('[a-f0-9]{32}', session):
@@ -526,7 +526,15 @@ class Handler(SimpleHTTPRequestHandler):
                     if not re.fullmatch(r'[a-f0-9]{64}\.fits', filename):
                         raise ValueError('The original source is no longer in this library.')
                     record = dict(frame, path=str(CACHE / filename))
-                return self.json_response(inspect_pixel(ensure_local(record), manifest['options'], float(args['x']), float(args['y'])))
+                x, y = float(args['x']), float(args['y'])
+                if parsed.path == '/api/pixel':
+                    return self.json_response(inspect_pixel(ensure_local(record), manifest['options'], x, y))
+                if not (0 <= x < 1 and 0 <= y < 1):
+                    raise ValueError('Click inside the image.')
+                from tracking import name_source
+                grid, size = grid_for(manifest['options'])
+                guess = grid.pixel_to_world(x * size - 0.5, (1 - y) * size - 0.5)  # same click-to-sky mapping as tracking.track
+                return self.json_response(name_source(ensure_local(record)['path'], guess, float(frame['mjd']), CACHE))
             return super().do_GET()
         except (ValueError, KeyError, IndexError, StopIteration, FileNotFoundError) as error:
             return self.json_response({'error': str(error)}, 400)

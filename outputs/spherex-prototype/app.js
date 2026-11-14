@@ -302,17 +302,18 @@ function resetView() {
 }
 
 function sessionReady(session, request) {
-  const previousTime = state.session?.frames[state.index]?.timestamp;
+  const previousTime = state.session?.frames[state.index]?.timestamp, prev = state.session?.options;  // read before the new session replaces them
   state.session = session;
   state.title = request.title;
   state.field = request.field;
   // Vesta is in only a few frames of its patch: a newly opened patch starts on one that shows it
-  const shown = session.frames.findIndex(frame => frame.marker), prev = state.session?.options;
+  const shown = session.frames.findIndex(frame => frame.marker);
   const samePatch = prev && prev.ra === session.options.ra && prev.dec === session.options.dec;
   state.index = Math.max(0, shown);
   if (previousTime && session.frames.length && (shown < 0 || samePatch)) {
-    state.index = session.frames.reduce((best, frame, i, frames) =>
-      Math.abs(new Date(frame.timestamp)-new Date(previousTime)) < Math.abs(new Date(frames[best].timestamp)-new Date(previousTime)) ? i : best, 0);
+    // Changing band or width keeps the time, and with Vesta keeps to the frames that show it
+    const gap = i => Math.abs(new Date(session.frames[i].timestamp)-new Date(previousTime));
+    state.index = session.frames.map((_, i) => i).filter(i => shown < 0 || session.frames[i].marker).reduce((best, i) => gap(i) < gap(best) ? i : best);
   }
   state.reference = session.frames.length-1;
   state.point = null;
