@@ -578,6 +578,8 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8765)
     args = parser.parse_args()
     initialize()
+    # The page loads ~17 files at once; through the tunnel they arrive together, and the default backlog of 5 refuses some.
+    ThreadingHTTPServer.request_queue_size = 64
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     print(f'SPHEREx prototype ready at http://127.0.0.1:{args.port}', flush=True)
     try:
