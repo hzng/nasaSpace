@@ -247,6 +247,84 @@ def identify(sky,mjd,cache,progress):
     r['distance_pc']=1000/r['parallax'] if reliable else None
     return r,'Gaia positional association; check crowded or blended sources.'
 
+
+SKYBOT = 'https://ssp.imcce.fr/webservices/skybot/api/conesearch.php'  # ~8 s; JPL sb_ident gave the same answer in ~70 s
+SIMBAD = 'https://simbad.harvard.edu/simbad/sim-tap/sync'  # the CDS host returned 404 on 2026-11-13
+
+
+def _cached_get(cache, url, params):
+    """Body of a GET, cached on disk: both catalogs answer the same query the same way."""
+    path = Path(cache) / 'identify' / (hashlib.sha256((url + json.dumps(params, sort_keys=True)).encode()).hexdigest() + '.txt')
+    if path.exists():
+        return path.read_text('utf-8')
+    response = requests.get(url, params=params, timeout=(10, 40))
+    response.raise_for_status()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(response.text, 'utf-8')  # SkyBoT answers 204 with no body when the cone is empty
+    return response.text
+
+
+def _solar_system(sky, mjd, cache):
+    # Geocentric (-loc=500): SPHEREx sits in low Earth orbit, about 1″ of parallax for a main-belt asteroid
+    text = _cached_get(cache, SKYBOT, {'-ep': f'{mjd + 2400000.5:.6f}', '-ra': f'{sky.ra.deg:.6f}', '-dec': f'{sky.dec.deg:.6f}',
+                                       '-rd': '0.01', '-mime': 'json', '-output': 'object', '-loc': '500', '-from': 'spherex-prototype'})
+    out = []
+    for row in json.loads(text) if text.strip() else []:
+        num, name = row.get('Num'), str(row.get('Name', '')).strip()
+        numbered = str(num).strip().isdigit()
+        out.append(dict(name=f'{num} {name}' if numbered and name != str(num) else name, kind='Solar System object',
+                        detail=row.get('Class', ''), source='IMCCE SkyBoT', separation_arcsec=float(row['d (arcsec)']),
+                        horizons=f'{num};' if numbered else name))  # a record number is unambiguous in Horizons
+    return out
+
+
+def _simbad(sky, mjd, cache):
+    ra, dec = sky.ra.deg, sky.dec.deg
+    # Positions are J2000. Barnard's Star, the fastest star, moves about 0.08° from it in 27 years, so fast movers come from a wider circle
+    query = f"""SELECT TOP 500 main_id, ra, dec, pmra, pmdec, otype FROM basic
+        WHERE CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.7f},{dec:.7f},0.1))=1
+        AND (CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.7f},{dec:.7f},0.01))=1 OR pmra*pmra+pmdec*pmdec>90000)"""
+    rows = json.loads(_cached_get(cache, SIMBAD, {'request': 'doQuery', 'lang': 'adql', 'format': 'json', 'query': query}))['data']
+    years = (mjd - 51544.5) / 365.25
+    out = []
+    for main_id, r, d, pmra, pmdec, otype in rows:
+        if r is None or d is None or str(otype).startswith('Pl'):
+            continue  # planets share their star's position
+        here = SkyCoord(r * u.deg, d * u.deg).spherical_offsets_by((pmra or 0) * years * u.mas, (pmdec or 0) * years * u.mas)
+        name = main_id
+        for prefix in ('NAME ', 'V* ', '* '):
+            name = name.removeprefix(prefix)
+        out.append(dict(name=' '.join(name.split()), kind='star' if '*' in str(otype) else 'catalogued object', detail=otype,
+                        source='SIMBAD', separation_arcsec=float(here.separation(sky).arcsec), horizons=None))
+    return out
+
+
+def name_source(path, guess, mjd, cache):
+    """Names the source under a click: centroid it, then ask SkyBoT and SIMBAD what sits there at that time."""
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        sky, _ = centroid(path, guess, search_px=3.0, allow_wing=True)
+        centroided = True
+    except ValueError:
+        sky, centroided = guess, False
+    tolerance = 6.15 if centroided else 12.3  # one SPHEREx pixel around a measured source, two around a bare click
+    with fits.open(path, memmap=True) as h:
+        header = h['IMAGE'].header
+        mid = float(header.get('MJD-AVG', mjd))
+        if str(header.get('TIMESYS', 'UTC')).strip().lower() != 'utc':
+            mid = float(Time(mid, format='mjd', scale=str(header['TIMESYS']).strip().lower()).utc.mjd)
+    found, unavailable = [], []
+    with ThreadPoolExecutor(2) as pool:
+        jobs = {'IMCCE SkyBoT': pool.submit(_solar_system, sky, mid, cache), 'SIMBAD': pool.submit(_simbad, sky, mid, cache)}
+        for label, job in jobs.items():
+            try:
+                found += job.result()
+            except Exception as error:  # one catalog down must not hide the other's answer
+                unavailable.append(f'{label} ({type(error).__name__})')
+    near = sorted((c for c in found if c['separation_arcsec'] <= tolerance), key=lambda c: c['separation_arcsec'])
+    return dict(match=near[0] if near else None, others=near[1:4], centroided=centroided, tolerance_arcsec=tolerance,
+                ra=float(sky.ra.deg), dec=float(sky.dec.deg), mjd=mid, searched=list(jobs), unavailable=unavailable)
+
 def _visit_groups(accepted, ref_sky, span_days):
     """Group rapid intra-visit exposures when the arc spans weeks/months."""
     pts = sorted(accepted, key=lambda p: p['mjd'])

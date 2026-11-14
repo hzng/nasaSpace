@@ -181,6 +181,12 @@ async function paint(canvas, frame, version) {
     drawCenter(ctx,left+.5*side,top+.5*side);
     const at = targetAt(frame);
     if (at) drawTarget(ctx,left+at[0]*side,top+at[1]*side);
+    // Vesta crosses this fixed patch in under a day: say where it went instead of drawing nothing
+    else if (state.field === "vesta" && !frame.marker && !(typeof StarTracker !== "undefined" && Object.keys(StarTracker.kinds()).length)) {
+      const days = [...new Set(state.session.frames.filter(f => f.marker).map(f => dateText(f.timestamp)))];
+      markLabel(ctx, "Vesta is not in this frame", left+12, top+66, "#eab354");
+      markLabel(ctx, days.length ? `It crosses this patch on ${days.join(" and ")}` : "No frame in this band shows it. Try D3 or D6.", left+12, top+82, "#eab354");
+    }
   }
   if (state.point) drawClick(ctx,left+state.point.x*side,top+state.point.y*side);
   if (state.cursor?.id === canvas.id) drawCursor(ctx,left+state.cursor.x*side,top+state.cursor.y*side);
@@ -311,17 +317,18 @@ function resetView() {
 }
 
 function sessionReady(session, request) {
-  const previousTime = state.session?.frames[state.index]?.timestamp;
+  const previousTime = state.session?.frames[state.index]?.timestamp, prev = state.session?.options;  // read before the new session replaces them
   state.session = session;
   state.title = request.title;
   state.field = request.field;
   // Vesta is in only a few frames of its patch: a newly opened patch starts on one that shows it
-  const shown = session.frames.findIndex(frame => frame.marker), prev = state.session?.options;
+  const shown = session.frames.findIndex(frame => frame.marker);
   const samePatch = prev && prev.ra === session.options.ra && prev.dec === session.options.dec;
   state.index = Math.max(0, shown);
   if (previousTime && session.frames.length && (shown < 0 || samePatch)) {
-    state.index = session.frames.reduce((best, frame, i, frames) =>
-      Math.abs(new Date(frame.timestamp)-new Date(previousTime)) < Math.abs(new Date(frames[best].timestamp)-new Date(previousTime)) ? i : best, 0);
+    // Changing band or width keeps the time, and with Vesta keeps to the frames that show it
+    const gap = i => Math.abs(new Date(session.frames[i].timestamp)-new Date(previousTime));
+    state.index = session.frames.map((_, i) => i).filter(i => shown < 0 || session.frames[i].marker).reduce((best, i) => gap(i) < gap(best) ? i : best);
   }
   state.reference = session.frames.length-1;
   state.point = null;
@@ -824,7 +831,8 @@ window.addEventListener?.("universe-open-object", event => {
   $("search-form").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-$("search-form").onsubmit = event => { event.preventDefault(); state.title = "Sky patch"; state.field = "custom"; state.objectContext = null; search(); };
+// Editing RA/Dec already turns the view into a custom patch (input listener below); an unedited saved target keeps its name and box
+$("search-form").onsubmit = event => { event.preventDefault(); search(); };
 $("archive-search").onclick = () => {
   if (!state.objectContext) {
     state.title = "IRSA patch";

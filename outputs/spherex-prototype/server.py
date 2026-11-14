@@ -198,11 +198,18 @@ def trim_cache():
                 items.append((path.stat().st_mtime, sum(f.stat().st_size for f in path.iterdir()), path))
         total = sum(size for _, size, _ in items)
         on_screen = max((item for item in items if item[2].is_dir()), default=(0, 0, None))[2]
+        # The open view's own cutouts stay too: tracking and spectra read them
+        keep = set()
+        try:
+            keep = {CACHE / f['fits_url'].removeprefix('/cache/')
+                    for f in json.loads((on_screen / 'manifest.json').read_text())['frames']}
+        except (OSError, TypeError, ValueError, KeyError):
+            pass
         # shortcut: cutouts are evicted by download age, not last use; touch them on read if re-fetching gets noticeable
         for _, size, path in sorted(items, key=lambda item: (item[2].is_dir(), item[0])):
             if total <= CACHE_LIMIT:
                 break
-            if path == on_screen:
+            if path == on_screen or path in keep:
                 continue
             try:
                 if path.is_dir():
@@ -421,9 +428,20 @@ def create_track(job_id, payload):
         manifest=load_manifest(sid)
         refresh_featured()
         with LOCK: lookup={r['sha256']:r for r in RECORDS}
+        # Files the cache trim removed are fetched again from IRSA; say so, or the job looks frozen
+        evicted=sum(1 for f in manifest['frames'] if f['sha256'] in lookup and not available(lookup[f['sha256']]))
+        fetched=[0]
+        if evicted:
+            with LOCK: JOBS[job_id].update(stage=f'Downloading {evicted} observations again from the NASA archive (the cache had removed them)')
         def local_path(frame):
             rec=lookup.get(frame['sha256'])
-            if rec: return ensure_local(rec)['path']
+            if rec and available(rec): return rec['path']
+            if rec:
+                path=ensure_local(rec)['path']
+                with LOCK:
+                    fetched[0]+=1
+                    JOBS[job_id].update(stage=f'Downloading observation {fetched[0]} of {evicted} again from the NASA archive')
+                return path
             filename=frame['fits_url'].removeprefix('/cache/')
             if not re.fullmatch(r'[a-f0-9]{64}\.fits',filename): raise ValueError('Original FITS unavailable')
             return str(CACHE/filename)
@@ -508,7 +526,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with LOCK:
                     job = JOBS.get(job_id)
                 return self.json_response(job or {'error': 'Job not found'}, 200 if job else 404)
-            if parsed.path == '/api/pixel':
+            if parsed.path in ('/api/pixel', '/api/identify'):
                 args = {k: v[0] for k, v in parse_qs(parsed.query).items()}
                 session = args['session']
                 if not re.fullmatch('[a-f0-9]{32}', session):
@@ -522,7 +540,15 @@ class Handler(SimpleHTTPRequestHandler):
                     if not re.fullmatch(r'[a-f0-9]{64}\.fits', filename):
                         raise ValueError('The original source is no longer in this library.')
                     record = dict(frame, path=str(CACHE / filename))
-                return self.json_response(inspect_pixel(ensure_local(record), manifest['options'], float(args['x']), float(args['y'])))
+                x, y = float(args['x']), float(args['y'])
+                if parsed.path == '/api/pixel':
+                    return self.json_response(inspect_pixel(ensure_local(record), manifest['options'], x, y))
+                if not (0 <= x < 1 and 0 <= y < 1):
+                    raise ValueError('Click inside the image.')
+                from tracking import name_source
+                grid, size = grid_for(manifest['options'])
+                guess = grid.pixel_to_world(x * size - 0.5, (1 - y) * size - 0.5)  # same click-to-sky mapping as tracking.track
+                return self.json_response(name_source(ensure_local(record)['path'], guess, float(frame['mjd']), CACHE))
             return super().do_GET()
         except (ValueError, KeyError, IndexError, StopIteration, FileNotFoundError) as error:
             return self.json_response({'error': str(error)}, 400)

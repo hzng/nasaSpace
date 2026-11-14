@@ -6,9 +6,11 @@ const StarTracker = (() => {
   const HELP_IDLE="Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.";
   const setText=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
   const PRED='#b9a3f5', BAD='#f0806e';
-  let typedObject=false;
+  let typedObject=false, identity=null, idSeq=0, idText='';
+  // A clicked star's name is for reading only; just Solar System objects go to JPL Horizons
+  const toJPL=()=>{const v=$("track-object").value.trim();return identity&&v===identity.name?(identity.horizons||''):v;};
   // A named object is tracked at its JPL position (tracking.py warns about the click distance only afterwards), so say so up front
-  const noteObject=()=>{const v=$("track-object").value.trim();$("track-object-note").hidden=!v;setText("track-object-note",`Tracks ${v} at its JPL-predicted position, not the pixel you click.`);};
+  const noteObject=()=>{const v=$("track-object").value.trim();$("track-object-note").hidden=!toJPL();setText("track-object-note",`Tracks ${v} at its JPL-predicted position, not the pixel you click.`);};
   const prefillObject=()=>{if(!typedObject)$("track-object").value=state.field==='vesta'?'Vesta':'';noteObject();};
   // Busy state: Track point says it is working and Clear becomes Cancel; clear() and the run's end restore both
   // While busy, #track-status shows each stage silently; the hidden announcer speaks only start, finish and failure
@@ -44,7 +46,7 @@ const StarTracker = (() => {
     updateLegend();
   }
 
-  window.addEventListener("sky-session-ready",()=>{clear();prefillObject();});
+  window.addEventListener("sky-session-ready",()=>{idSeq++;identity=null;clear();prefillObject();});
   window.addEventListener("sky-point-picked",event=>{
     if(awaitingAnchor2 && choice && event.detail.frame !== choice.frame){
       anchor2=event.detail;
@@ -52,15 +54,39 @@ const StarTracker = (() => {
       $("track-status").textContent=`Anchor 2 locked (frame ${anchor2.frame+1}). Ready to track moving path.`;
       return;
     }
-    // Stepping frames re-inspects the same pixel; that must not wipe a finished track.
-    if(result&&choice&&event.detail.x===choice.x&&event.detail.y===choice.y)return;
+    // Stepping frames re-inspects the same pixel; that must not wipe a finished track or ask the catalogs again.
+    const same=choice&&event.detail.x===choice.x&&event.detail.y===choice.y;
+    if(result&&same)return;
+    if(!same)identity=null;  // before clear() redraws, so the previous name is not shown on the new click
     clear();
     choice=event.detail;
     if($("track-anchor"))$("track-anchor").disabled=false;
-    $("track-status").textContent=`Selected ${choice.ra.toFixed(5)}°, ${choice.dec.toFixed(5)}°. Ready to track.`;
+    if(same)$("track-status").textContent=idText;
+    else identify(choice);
   });
 
-  $("track-clear").onclick=clear;
+  // Names the clicked source (asteroids and comets: IMCCE SkyBoT; stars: SIMBAD) and puts the name in the object box
+  async function identify(c){
+    const token=++idSeq, box=$("track-object"), where=`Selected ${c.ra.toFixed(5)}°, ${c.dec.toFixed(5)}°.`;
+    identity=null;
+    $("track-status").textContent=idText=`${where} Identifying the source…`;
+    try{
+      const r=await api('/api/identify?'+new URLSearchParams({session:state.session.id,frame:c.frame,x:c.x,y:c.y}));
+      if(token!==idSeq)return;
+      const m=r.match, down=r.unavailable.length?` ${r.unavailable.join(', ')} did not answer.`:'';
+      identity=m?{...m,frame:c.frame,x:c.x,y:c.y}:null;
+      if(m){box.value=m.name;typedObject=false;}
+      else if(!typedObject)box.value='';
+      noteObject();
+      idText=m?`${m.name} · ${m.kind}, ${m.source}, ${m.separation_arcsec.toFixed(1)}″ from the ${r.centroided?'measured source':'clicked pixel'}. `
+        +(m.horizons?'Track point follows it with JPL Horizons.':'Track point measures it on every frame.')+down
+        :`${where} No catalogued object within ${r.tolerance_arcsec.toFixed(1)}″ (${r.searched.join(', ')}). Track point follows the source itself.${down}`;
+      $("track-status").textContent=idText;
+      draw();
+    }catch(e){if(token===idSeq)$("track-status").textContent=idText=`${where} Could not identify it: ${e.message}`;}
+  }
+
+  $("track-clear").onclick=()=>{idSeq++;identity=null;clear();};
   if($("track-anchor")){
     $("track-anchor").onclick=()=>{
       if(!choice){$("track-status").textContent="Pick the object on frame 1 first.";return;}
@@ -72,7 +98,7 @@ const StarTracker = (() => {
 
   $("track-star").onclick=async()=>{
     if(!state.session?.frames.length)return;
-    const obj=$("track-object").value.trim();
+    const obj=toJPL();
     if(!choice&&!obj){$("track-status").textContent="Click a star or moving object in the image first, or type a Solar System object.";return;}
     const token=++version;$("track-star").disabled=true;setBusy(true);$("track-status").classList.remove("track-error");announce("Tracking started.");
     // The walkthrough card has done its job once a track starts; it returns on Clear or a new pick
@@ -308,6 +334,8 @@ const StarTracker = (() => {
 
   function kinds(){
     if(!result||result.session!==state.session?.id)return {};
+    // Nothing is drawn on a frame without the object, so the legend lists nothing; the key still says a track exists
+    if(offView(state.index))return {offscreen:true};
     const k={};
     for(const p of result.points){
       if(p.accepted)k[p.fit_mode==='wing'?'wing':'measured']=true;
@@ -318,11 +346,21 @@ const StarTracker = (() => {
   }
 
   function paint(ctx,frame,{side,left,top}){
+    // Name the clicked source next to the click, on the frame it was identified in (a moving object is elsewhere on other frames)
+    if(identity&&!cur()&&frame.index===identity.frame)markLabel(ctx,identity.name,left+identity.x*side+14,top+identity.y*side-16,'#6cb8ff');
     if(!result||result.session!==state.session?.id)return;
     const p=result.points.find(pt=>pt.index===frame.index);if(!p)return;
     const ordered=result.points.filter(v=>v.accepted).sort((a,b)=>a.mjd-b.mjd);
     ctx.save();ctx.beginPath();ctx.rect(left,top,side,side);ctx.clip();
 
+    // The object is not on this frame's image: draw no path, say where it is instead
+    if(offView(frame.index)){
+      const seen=[...new Set(result.points.filter(inView).sort((a,b)=>a.mjd-b.mjd).map(v=>dateText(v.timestamp)))];
+      const noteY=card&&!card.classList.contains('dot-top')?top+side-62:top+66;  // away from the info card
+      markLabel(ctx,`${result.ephemeris?.object||result.catalog?.name||'The tracked object'} is not in this frame`,left+12,noteY,BAD);
+      markLabel(ctx,!seen.length?'It is outside the image on every frame':seen.length>3?`It is on the image on ${seen.length} dates, ${seen[0]} to ${seen.at(-1)}`:`It is on the image on ${seen.join(', ')}`,left+12,noteY+16,BAD);
+      ctx.restore();return;
+    }
 
     // Faded future/full measured trajectory
     if(ordered.length>=2){
@@ -414,8 +452,13 @@ const StarTracker = (() => {
 
   // ---- Predicted path: hit test, info card ----
   const cur=()=>result&&result.session===state.session?.id?result:null;
+  // On a frame's image only when measured there or predicted inside the image (the server keeps predictions up to 16 px outside)
+  const inView=p=>!!p&&(p.accepted||(!!p.predicted&&p.predicted.every(v=>v>=0&&v<=1)));
+  // Only a track with predictions (Horizons, Gaia, 2nd pick) knows the object left the image; a blind track just failed to measure
+  const offView=index=>!!cur()&&result.points.some(v=>v.predicted)&&!inView(result.points.find(v=>v.index===index));
   function predicted(){return cur()?result.points.filter(p=>p.predicted).sort((a,b)=>a.mjd-b.mjd):[];}
   function pick(px,py,{side,left,top}){
+    if(offView(state.index))return null;  // the path is hidden on this frame, so its dots cannot be clicked
     let best=null,bd=Infinity;
     for(const p of predicted()){
       const d=Math.hypot(left+p.predicted[0]*side-px,top+p.predicted[1]*side-py);
