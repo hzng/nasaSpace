@@ -1,0 +1,422 @@
+/* Inspector: one panel, sections divided by one hairline */
+.inspector {
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+}
+
+@media (min-width: 1121px) {
+  .inspector {
+    position: sticky;
+    top: 60px;
+    align-self: start;
+    max-height: calc(100vh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+.inspector-section {
+  padding: var(--s4);
+}
+
+.inspector-section:not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+
+.section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0;
+}
+
+/* Callout: neutral; collapses when its three children are hidden */
+.vesta-callout {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+}
+
+.vesta-callout:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.callout-banner {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.example-shortcut {
+  justify-self: start;
+  text-align: left;
+  white-space: normal;
+  margin-left: calc(-1 * var(--s2));
+}
+
+.vesta-guide {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.vesta-guide strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vesta-guide span {
+  color: var(--muted);
+}
+
+.inspector-card {
+  padding: 0;
+}
+
+.inspector-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 0 var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--s4);
+}
+
+.tabs button {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.tabs button[aria-selected=true] {
+  color: var(--text);
+  border-bottom-color: var(--text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tabs button:hover { color: var(--text); }
+}
+
+.inspector-util-btns {
+  display: flex;
+  gap: var(--s2);
+}
+
+#observation-panel, #pixel-panel {
+  padding: var(--s4);
+}
+
+.obs-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s4);
+}
+
+.obs-banner h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.obs-utc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.obs-dl-group {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* Label / value lists */
+dt {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.kv-grid, #pixel-result > dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3) var(--s4);
+  margin: 0 0 var(--s4);
+}
+
+.kv-grid > div, #pixel-result > dl > div {
+  display: grid;
+  gap: 2px;
+}
+
+#metadata > div:first-child dd {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+#pixel-result > dl {
+  grid-template-columns: 1fr;
+  gap: var(--s2);
+}
+
+#pixel-result > dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s3);
+}
+
+#pixel-result > dl dd {
+  text-align: right;
+}
+
+/* Also used by the 3D Map screen: a plain base */
+.kv-list {
+  margin: var(--s1) 0 var(--s3);
+}
+
+.kv-list > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.kv-list dd {
+  text-align: right;
+}
+
+.inspector .kv-list > div {
+  padding: 0;
+  border: 0;
+}
+
+.inspector .kv-list {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* Quality card */
+.quality-card {
+  background: var(--surface);
+  border-radius: var(--r-control);
+  padding: var(--s2) var(--s3);
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 16px;
+  margin-bottom: var(--s3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease-out);
+}
+
+.quality-card:empty {
+  display: none;
+}
+
+.quality-card strong {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--text);
+}
+
+.quality-card strong::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .quality-card:hover { background: var(--surface-hover); }
+}
+
+.flag-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  flex-basis: 100%;
+}
+
+.flag-chip {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  background: var(--surface-hover);
+  padding: 2px var(--s2);
+  border-radius: var(--r-control);
+}
+
+/* Disclosures: quiet rows */
+details {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  rotate: -45deg;
+  transition: rotate var(--t-fast) var(--ease-out);
+}
+
+details[open] > summary::before {
+  rotate: 45deg;
+}
+
+details p {
+  margin: var(--s2) 0 0;
+}
+
+.hash-details {
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+details code {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font: 12px/16px var(--mono);
+  color: var(--muted);
+  margin: var(--s2) 0;
+}
+
+/* Pixel tab */
+.pixel-guide-hint {
+  margin-bottom: var(--s3);
+  color: var(--muted);
+}
+
+.pixel-guide-hint svg {
+  display: none;
+}
+
+#pixel-panel:has(#pixel-result:not(:empty)) .pixel-guide-hint {
+  display: none;
+}
+
+.intro-pixel {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 20px;
+}
+
+.flag-ref {
+  display: inline-flex;
+  margin-top: var(--s2);
+  margin-left: calc(-1 * var(--s3));
+}
+
+.flag {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  background: var(--surface-hover);
+  padding: 2px var(--s2);
+  border-radius: var(--r-control);
+  margin: var(--s1) var(--s1) 0 0;
+}
+
+.flag.caution {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.hover-flag-badge {
+  top: 64px;
+  right: 12px;
+  background: var(--panel);
+  color: var(--text);
+  padding: var(--s1) var(--s3);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--shadow-float);
+  pointer-events: none;
+}
+
+/* Repeats the flag-mask colour drawn on the canvas, so it keeps its data colour. */
+.flag-swatch, .legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+  background: rgba(235, 92, 82, 0.72);
+  border: 1px solid #f58d84;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }

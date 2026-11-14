@@ -1,0 +1,222 @@
+/* Design tokens and base elements. The contract is outputs/ui-design-spec.md: nothing outside this file hard-codes a colour. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #0b0c0e;
+  --panel: #121316;
+  --surface: #191b1f;
+  --surface-hover: #212328;
+  --canvas-bg: #060709;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --line-hover: rgba(255, 255, 255, 0.28);
+
+  /* Text */
+  --text: #ededef;
+  --muted: #a0a3ab;
+  --subtle: #858892;
+
+  /* Neutral accent: filled primary, checked and selected states */
+  --accent: #ededef;
+  --accent-hover: #ffffff;
+  --accent-ink: #0b0c0e;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+  --focus: #6ea8fe;
+
+  /* Meaning */
+  --warning: #e5b25d;
+  --warning-soft: rgba(229, 178, 93, 0.12);
+  --danger: #f0806e;
+  --danger-soft: rgba(240, 128, 110, 0.12);
+  --positive: #68d391;
+  --positive-soft: rgba(104, 211, 145, 0.12);
+
+  /* Canvas mark colours, only where the DOM repeats a mark drawn on the image */
+  --sky: #6cb8ff;
+  --predict: #b9a3f5;
+
+  /* Type */
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display: var(--sans);
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+
+  /* Spacing scale */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Shape */
+  --control-h: 32px;
+  --control-h-compact: 28px;
+  --r-control: 6px;
+  --r-panel: 10px;
+  --shadow-float: 0 0 0 1px var(--line-strong), 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 120ms;
+  --t-menu: 160ms;
+  --t-dialog: 200ms;
+
+  /* Older names still read by component files; same values as above */
+  --ease-in-out: var(--ease-out);
+  --ease-icon: var(--ease-out);
+  --shadow-border: 0 0 0 1px var(--line);
+  --shadow-border-hover: 0 0 0 1px var(--line-strong);
+  --shadow-dialog: var(--shadow-float);
+  --image-outline: var(--line);
+
+  font: 13px/20px var(--sans);
+}
+
+/* Touch screens and narrow windows get taller controls. */
+@media (pointer: coarse), (max-width: 768px) {
+  :root {
+    --control-h: 40px;
+    --control-h-compact: 36px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+::selection {
+  background: rgba(110, 168, 254, 0.35);
+  color: var(--text);
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button, a, input, select, summary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: var(--t-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+button, select, summary {
+  cursor: pointer;
+}
+
+button {
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  padding: 0 var(--s3);
+  background: none;
+  color: var(--text);
+}
+
+button:disabled,
+input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+input, select {
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  caret-color: var(--text);
+}
+
+input::placeholder {
+  color: var(--subtle);
+  opacity: 1;
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline-offset: 0;
+  border-color: var(--focus);
+}
+
+input[type=checkbox] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+input[type=file] {
+  height: auto;
+  padding: var(--s1);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+input[type=file]::file-selector-button {
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-hover);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  padding: var(--s1) 10px;
+  margin-inline-end: 10px;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}

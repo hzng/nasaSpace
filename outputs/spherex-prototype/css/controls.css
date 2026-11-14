@@ -1,0 +1,108 @@
+/* Shared controls: sliders and the three button kinds. Class names are read by the JavaScript and stay as they are. */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  height: 20px;
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 0;
+  margin-top: -5px;
+  cursor: pointer;
+}
+
+input[type=range]::-moz-range-track {
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+input[type=range]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 0;
+  cursor: pointer;
+}
+
+/* Buttons. Primary (.btn-brass): one per region. Default (.btn-outline): bordered surface. Ghost: text only. */
+.btn-brass,
+.btn-outline,
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  padding: 0 var(--s3);
+  border-radius: var(--r-control);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn-brass svg,
+.btn-outline svg,
+.btn-ghost svg {
+  flex: none;
+}
+
+.btn-brass {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-outline {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+.btn-compact {
+  min-height: var(--control-h-compact);
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.btn-outline.primary-hint {
+  border-color: var(--text);
+}
+
+.btn-brass:not(:disabled):active,
+.btn-outline:not(:disabled):active,
+.btn-ghost:not(:disabled):active {
+  scale: 0.98;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  a:hover { text-decoration-color: var(--text); }
+  input:hover:not(:disabled), select:hover:not(:disabled) { border-color: var(--line-hover); }
+  .btn-brass:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-outline:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--line-hover); }
+  .btn-ghost:hover:not(:disabled) { color: var(--text); background: var(--accent-soft); }
+  input[type=file]::file-selector-button:hover { background: var(--surface); }
+  summary:hover { color: var(--text); }
+}

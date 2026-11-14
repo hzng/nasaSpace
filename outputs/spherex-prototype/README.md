@@ -18,6 +18,16 @@ Use Python 3.12 to 3.14. Python 3.15 is not supported yet: the packages have no 
 
 The six bundled example fields work with no network. To load the full list of other observations, copy `.env.example` to `.env` in this folder and fill in `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the Supabase secret or service-role key). `.env` is ignored by git. The key is used only by the local Python server and scripts and is never sent to the browser. Real environment variables take precedence over `.env`. At start, the server downloads the observation index from Supabase when credentials are set. If Supabase is unreachable or not configured, it uses the local copy. With neither, the app runs on the six bundled examples only.
 
+## Interface layout
+
+- **Styles**: the former single `app.css` is split into twelve files in `css/`, loaded in this order by `index.html`: tokens, controls, appbar, menu, stage, inspector, spectrum, atlas, tracker, dialogs, responsive, overrides.
+- `css/tokens.css` holds every colour, spacing, radius, control height and timing. Other style files must use these tokens.
+- The design rules are in `../ui-design-spec.md`. The problems they answer are in `../ui-audit.md`.
+- **Palette**: neutral graphite with white as the primary accent. Amber is used only for data-quality warnings. Canvas mark colours are unchanged.
+- **Dropdowns**: `ui-select.js` (no dependencies) replaces every native dropdown on screen with a custom menu. The native `<select>` stays in the page as the source of truth, so existing code is unchanged.
+- Lists longer than 10 items get a search box. Keyboard: arrows, Home/End, Enter, Space, Esc, Tab and type-ahead. The target menu also moves with arrow keys.
+- There is still no build step. The run steps above are unchanged.
+
 ## Workspace guide
 
 ### 1. Sky observations, flags & motion tracking

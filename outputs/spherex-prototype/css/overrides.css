@@ -1,0 +1,8 @@
+/* Arrival of new content: a short fade, nothing else moves on its own. */
+@keyframes soft-fade { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; translate: 0 4px; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .viewers.resolve canvas { animation: soft-fade 200ms var(--ease-out) both; }
+  #track-result:not([hidden]), .path-card { animation: rise-in var(--t-menu) var(--ease-out) both; }
+}

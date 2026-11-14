@@ -5,11 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Inspect real archived SPHEREx observations, spectra, and catalog 3D distances.">
   <title>SPHEREx · Celestial Workbench</title>
-  <link rel="stylesheet" href="app.css?v=10">
+  <link rel="stylesheet" href="css/tokens.css?v=12">
+  <link rel="stylesheet" href="css/controls.css?v=12">
+  <link rel="stylesheet" href="css/appbar.css?v=12">
+  <link rel="stylesheet" href="css/menu.css?v=12">
+  <link rel="stylesheet" href="css/stage.css?v=12">
+  <link rel="stylesheet" href="css/inspector.css?v=12">
+  <link rel="stylesheet" href="css/spectrum.css?v=12">
+  <link rel="stylesheet" href="css/atlas.css?v=12">
+  <link rel="stylesheet" href="css/tracker.css?v=12">
+  <link rel="stylesheet" href="css/dialogs.css?v=12">
+  <link rel="stylesheet" href="css/responsive.css?v=12">
+  <link rel="stylesheet" href="css/overrides.css?v=12">
   <script src="app.js?v=10" defer></script>
   <script src="light.js?v=2" defer></script>
   <script src="universe.js?v=2" defer></script>
   <script src="tracking.js?v=9" defer></script>
+  <script src="ui-select.js?v=1" defer></script>
 </head>
 <body>
   <header class="app-bar">
@@ -18,7 +30,7 @@
         <svg class="crest-mark" width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
           <circle cx="13" cy="13" r="10.5" stroke="currentColor" stroke-width="1.4" stroke-opacity="0.28"/>
           <ellipse cx="13" cy="13" rx="10.5" ry="4.4" transform="rotate(-28 13 13)" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M13 6.2v2.4M13 17.4v2.4M6.2 13h2.4M17.4 13h2.4" stroke="#6cb8ff" stroke-width="1.35" stroke-linecap="round"/>
+          <path d="M13 6.2v2.4M13 17.4v2.4M6.2 13h2.4M17.4 13h2.4" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
           <circle cx="13" cy="13" r="2.2" fill="currentColor"/>
         </svg>
         <span class="crest-title">
@@ -138,7 +150,6 @@
 
           <div class="query-buttons">
             <button type="submit" class="btn-brass btn-trail" id="search-button">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>
               <span>Load patch</span>
             </button>
             <button type="button" id="archive-search" class="btn-outline btn-trail">
@@ -152,7 +163,6 @@
             <details class="query-disclosure">
               <summary>
                 <span class="summary-label">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>
                   <span>Date filter</span>
                 </span>
                 <span id="source-state">UTC · Auto</span>
@@ -228,7 +238,7 @@
             </div>
 
             <div class="transport hero-float" role="group" aria-label="Playback">
-              <button id="play" type="button" class="btn-brass" aria-pressed="false">
+              <button id="play" type="button" class="btn-outline" aria-pressed="false">
                 <span class="play-icon-slot" aria-hidden="true">
                   <svg class="icon-play" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.8 3.2v9.6l8-4.8z"/></svg>
                   <svg class="icon-pause" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="3.8" y="3.2" width="3" height="9.6" rx="0.9"/><rect x="9.2" y="3.2" width="3" height="9.6" rx="0.9"/></svg>
@@ -287,10 +297,7 @@
                 <h2 id="light-title" class="section-title">Spectrum</h2>
                 <p id="light-position" class="coord-sub">Center default</p>
               </div>
-              <button id="measure-light" type="button" class="btn-brass btn-trail">
-                <span>Measure</span>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h2.5l2-5 3 7 2-3.5H14"/></svg>
-              </button>
+              <button id="measure-light" type="button" class="btn-brass">Measure</button>
             </div>
 
             <div class="light-controls">
@@ -490,7 +497,7 @@
     <section id="universe-workspace" hidden class="surface-card universe-workspace">
       <div class="card-header">
         <div class="target-title-block">
-          <p class="map-eyebrow">THE OBSERVED UNIVERSE</p><h1>Cosmic atlas</h1>
+          <h1>Cosmic atlas</h1>
           <p id="universe-status" class="coord-sub" role="status">Loading…</p>
         </div>
         <div class="universe-head-controls">
@@ -504,9 +511,9 @@
       </div>
 
       <div class="atlas-controls">
-        <label>View<select id="atlas-view"><option value="slice">Thin slice · less overlap</option><option value="volume">Full catalog volume</option><option value="nearby">Selected neighborhood</option></select></label>
-        <label>Distance limit <output id="atlas-distance-value"></output><input id="atlas-distance" type="range" min="1" max="100" value="100"></label>
-        <label>Slice thickness <output id="atlas-thickness-value"></output><input id="atlas-thickness" type="range" min="2" max="100" value="6"></label>
+        <label><span>View</span><select id="atlas-view"><option value="slice">Thin slice · less overlap</option><option value="volume">Full catalog volume</option><option value="nearby">Selected neighborhood</option></select></label>
+        <label><span>Distance limit <output id="atlas-distance-value"></output></span><input id="atlas-distance" type="range" min="1" max="100" value="100"></label>
+        <label><span>Slice thickness <output id="atlas-thickness-value"></output></span><input id="atlas-thickness" type="range" min="2" max="100" value="6"></label>
         <label class="check-label"><input id="atlas-grid" type="checkbox"> Coordinate guides</label>
         <button id="atlas-fit" class="btn-outline">Fit visible objects</button>
       </div>
@@ -523,7 +530,7 @@
         </div>
 
         <aside class="universe-details">
-          <div class="atlas-browser"><label for="atlas-search">Find an object</label><input id="atlas-search" type="search" placeholder="Catalog name or ID" autocomplete="off"><div class="atlas-list-heading"><span id="atlas-results-count"></span><select id="atlas-sort" aria-label="Sort objects"><option value="distance">Nearest first</option><option value="name">Name / ID</option></select></div><div id="atlas-results" class="atlas-results" role="group" aria-label="Catalog objects"></div><div class="pair-buttons"><button id="atlas-prev-page" class="btn-outline">Previous</button><button id="atlas-next-page" class="btn-outline">Next</button></div><p id="atlas-browser-note" class="small muted">Choose a row to locate it. Focus brings its surroundings closer.</p></div>
+          <div class="atlas-browser"><label for="atlas-search">Find an object</label><input id="atlas-search" type="search" placeholder="Catalog name or ID" autocomplete="off"><div class="atlas-list-heading"><span id="atlas-results-count"></span><select id="atlas-sort" aria-label="Sort objects"><option value="distance">Nearest first</option><option value="name">Name / ID</option></select></div><div id="atlas-results" class="atlas-results" role="group" aria-label="Catalog objects"></div><div class="pair-buttons"><button id="atlas-prev-page" class="btn-outline">Previous</button><button id="atlas-next-page" class="btn-outline">Next</button></div><p id="atlas-browser-note" class="small">Choose a row to locate it. Focus brings its surroundings closer.</p></div>
           <div class="record-head">
             <h2 id="universe-object">Solar System origin</h2>
           </div>
@@ -606,6 +613,6 @@
     <img id="context-image" alt="Full archived SPHEREx detector image">
     <a id="context-source" target="_blank" rel="noreferrer">Original FITS ↗</a>
   </dialog>
-  <dialog id="star-space" class="star-space"><div class="dialog-title"><div><p class="map-eyebrow">ONE STAR · OUR SOLAR SYSTEM</p><h2 id="star-space-title">Relative motion</h2></div><button id="star-space-close" class="btn-outline">Back to images ×</button></div><div class="star-space-stage"><canvas id="star-space-canvas" aria-label="Selected star and Solar System in three dimensional space. Drag to orbit and scroll to zoom." tabindex="0"></canvas><div class="star-space-hud"><span id="star-space-distance"></span><span>Drag to orbit · Scroll to zoom<br>Sphere sizes are illustrative · distances in parsecs</span></div></div><div class="star-space-controls"><button id="star-space-play" class="btn-brass">▶ Play motion</button><label>Year <output id="star-space-year-label">2016</output><input id="star-space-year" type="range" min="1516" max="2516" value="2016"></label><button id="star-space-reset" class="btn-outline">Reset view</button></div><p id="star-space-note" class="atlas-context"></p></dialog>
+  <dialog id="star-space" class="star-space"><div class="dialog-title"><div><p class="map-eyebrow">One star · our Solar System</p><h2 id="star-space-title">Relative motion</h2></div><button id="star-space-close" class="close-dialog btn-ghost" type="button" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div><div class="star-space-stage"><canvas id="star-space-canvas" aria-label="Selected star and Solar System in three dimensional space. Drag to orbit and scroll to zoom." tabindex="0"></canvas><div class="star-space-hud"><span id="star-space-distance"></span><span>Drag to orbit · Scroll to zoom<br>Sphere sizes are illustrative · distances in parsecs</span></div></div><div class="star-space-controls"><button id="star-space-play" class="btn-brass" type="button">▶ Play motion</button><label>Year <output id="star-space-year-label">2016</output><input id="star-space-year" type="range" min="1516" max="2516" value="2016"></label><button id="star-space-reset" class="btn-outline">Reset view</button></div><p id="star-space-note" class="atlas-context"></p></dialog>
 </body>
 </html>

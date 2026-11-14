@@ -260,3 +260,50 @@ Git (updated 2026-11-13): the redesign is committed locally as `4683c0c` (titled
 - Evidence: on a spare port, the Vesta view opened with 58 frames, no console errors; tracking "Vesta" returned a JPL Horizons result in the side panel (2 of 58 frames measured, both within tolerance; the other 56 report "Predicted position outside field of view"). Through the public URL: page 200 with `app.css?v=10`, library 6 fields, dotfile 404, foreign-origin POST 403, import 403.
 - Not checked: the result panel on phone widths; a track run through the public URL.
 - Caution: `worktrees/branch1/work` is a junction to `worktrees/fable/work`. Remove the junction with `cmd /c rmdir` before deleting that worktree.
+
+# Orchestrator plan: UI redesign (2026-11-13, user request)
+
+Goal: a visual and interaction pass that makes the app feel like a polished product. Minimalist, every feature kept, no logic changes. Audit: `outputs/ui-audit.md`. Contract: `outputs/ui-design-spec.md`.
+
+Where: the `fable` worktree, fast-forwarded to `branch1` (`cd0b7d3`). Development server on port 8767 (`SPHEREX_CACHE_GB=50`, so it never trims the cache it shares with the live site). The live site runs from `worktrees/branch1` on port 8765 and is not touched. Nothing is committed.
+
+## Tasks
+
+| ID | Outcome | Files | Depends on | Difficulty | Owner | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| U0 | Audit, design spec, stylesheet split into `css/*.css`, tokens and shared buttons and fields | `outputs/ui-audit.md`, `outputs/ui-design-spec.md`, `css/tokens.css`, `css/controls.css`, `css/overrides.css`, `index.html` links | none | HARD | orchestrator | done |
+| U1 | `ui-select`: every native `<select>` replaced on screen by a keyboard-navigable listbox; target menu and all popovers share one menu style | `ui-select.js` (new), `css/menu.css`, `index.html` (script tag only) | U0 | HARD | opus | done |
+| U2 | App bar and toolbar: one row at 1280 px, 32 px controls, grouped status | `css/appbar.css`, `index.html` header and toolbar | U0 | MEDIUM | sonnet | done |
+| U3 | Stage: image inside its frame, floating bars, legend, frame strip, notes | `css/stage.css`, `index.html` stage | U0 | MEDIUM | sonnet | done |
+| U4 | Side panel and tracker: no clipping, calm callout, metadata, flags, tracker results, path card | `css/inspector.css`, `css/tracker.css`, `index.html` aside | U0 | MEDIUM | sonnet | done |
+| U5 | Spectrum panel, dialogs and footer | `css/spectrum.css`, `css/dialogs.css`, `index.html` spectrum, footer, dialogs | U0 | MEDIUM | sonnet | done |
+| U6 | 3D Map screen | `css/atlas.css`, `index.html` universe section | U0 | MEDIUM | sonnet | done |
+| U7 | Responsive pass at 375, 768 and 1280 px | `css/responsive.css`, `css/overrides.css` | U1 to U6 | MEDIUM | sonnet | done |
+| U8 | README and verification notes describe the new files and look | `README.md`, `VERIFICATION_REPORT.md` | U7 | EASY | haiku | done |
+| U9 | Audit: read every diff, screenshots at three widths, keyboard and mouse test of menus, demo flow, final spacing pass | none | U1 to U8 | HARD | orchestrator | done |
+
+## Contract between U1 and the area tasks
+
+U1 leaves each `<select>` in the DOM as the source of truth (class `ui-select-native`, hidden from sight and from the tab order) and adds next to it:
+
+```html
+<span class="ui-select" data-for="fov">
+  <button type="button" class="ui-select-trigger" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+    <span class="ui-select-value">15 arcmin</span><svg class="ui-select-chevron">…</svg>
+  </button>
+</span>
+```
+
+The list is a `div.ui-menu[popover]` in the top layer holding `div.ui-menu-list[role=listbox]` with `div.ui-menu-item[role=option]` rows. The trigger is a bordered field `var(--control-h)` tall, and borderless when it sits inside `.stepper` or `.transport`. Area tasks do not style `select` or anything named `ui-select*` or `ui-menu*`; they may only size the `.ui-select` wrapper (width, flex).
+
+## Rules for every task
+
+Tokens only, no new hard-coded colours. IDs and classes read by the JavaScript stay. No edits to `*.py`, `app.js`, `tracking.js`, `light.js`, `universe.js` (U1 adds `ui-select.js`). No commit, no server restart, nothing under `worktrees/branch1`. Each task uses its own browser state file under `work/browse/<id>/`.
+
+## Log
+- 2026-11-13: all subagents stopped at the usage limit before any edit; resumed after the reset.
+- U1 to U8 done. Orchestrator review: read `ui-select.js` in full; keyboard and mouse test of the dropdowns (arrows, Esc, Enter, Tab, search, outside click, target menu arrows) passed; demo flow passed (play, pixel, compare, Vesta track with Horizons, spectrum 2 points, 3D Map, Inspect sky); computed-contrast script over every visible text node: all pass WCAG AA on both screens at 1440; no horizontal scroll at 375, 768, 1280, 1440; no console errors.
+- Orchestrator fixes after review: stepper values truncated (sent to U7, fixed); star dialog rules duplicated in tracker.css and dialogs.css (merged into dialogs.css); chart drawn as a box inside a box (well padding removed); FOV badge beside the other pane's date in compare (hidden in compare); 3D Map badge under the camera buttons at 375 (badge moved below them). Stylesheet versions raised to v=12.
+- Allowed hard-coded colours left: the dialog backdrop, and the flag swatch that repeats the canvas mask colour.
+- Not checked: Firefox and Safari, screen readers, the R Draconis 2,493-option list with real data, dragging the 3D map by hand, hover and press motion in a live browser.
+- Screenshots: `work/ui-shots/before/` and `work/ui-shots/after/`. Not committed, not deployed.
