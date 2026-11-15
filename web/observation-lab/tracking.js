@@ -36,6 +36,7 @@ const StarTracker = (() => {
     resetAnchorBtn();
     $("track-result").hidden=true;
     $("track-3d").disabled=true;
+    if($("track-spectrum"))$("track-spectrum").disabled=true;
     setText("track-help",HELP_IDLE);
     $("track-star").disabled=false;setBusy(false);
     $("vesta-callout").hidden=false;
@@ -226,6 +227,8 @@ const StarTracker = (() => {
     const hasPath=result.points.some(p=>p.predicted);
     $("track-path").hidden=!hasPath;
     $("track-3d").disabled=!c?.xyz;
+    if($("track-spectrum"))$("track-spectrum").disabled=!points.length;
+    window.dispatchEvent(new CustomEvent("star-track-ready",{detail:result}));
     setText("track-help",c?.xyz?"3D motion is ready for this Gaia star.":
       result.target_kind==='asteroid'?"3D motion is unavailable: Solar System and 2-frame targets are not matched to the Gaia catalog.":
       !c?"3D motion is unavailable: no unique Gaia DR3 match within 6.15″ of this source.":
@@ -525,6 +528,17 @@ const StarTracker = (() => {
     openCard(l.reduce((a,b)=>Math.abs(b.mjd-t)<Math.abs(a.mjd-t)?b:a));
   };
   $("track-export").onclick=()=>result&&download('star-motion-track.json',JSON.stringify(result,null,2),'application/json');
+  if($("track-spectrum")){
+    $("track-spectrum").onclick=()=>{
+      if(!result?.points?.length)return;
+      if($("light-follow-track")) $("light-follow-track").checked=true;
+      if($("light-track-toggle-wrap")) $("light-track-toggle-wrap").hidden=false;
+      const targetCard=$("light-card")||document.querySelector(".panel-light")||$("measure-light");
+      if(targetCard) targetCard.scrollIntoView({behavior:'smooth'});
+      if(typeof window.measureLight==='function') window.measureLight({follow_track:true});
+      else if($("measure-light")) $("measure-light").click();
+    };
+  }
   function stopSpace(){clearInterval(timer);timer=null;$("star-space-play").textContent='▶ Play motion';}
   $("track-3d").onclick=()=>{if(!result?.catalog?.xyz)return;const c=result.catalog;$("star-space-title").textContent=c.name;$("star-space-year").value=Math.round(c.epoch);$("star-space-play").disabled=!c.velocity;$("star-space-year").disabled=!c.velocity;$("star-space-note").textContent=c.velocity?'Gaia catalog trajectory: straight-line motion relative to the Solar System barycenter. This path uses catalog distance, proper motion and radial velocity, independently of the image drift. No orbital acceleration or full uncertainty propagation. The background is decorative.':'Gaia distance locates this source in space. Radial velocity is unavailable, so a complete 3D trajectory cannot be shown. The background is decorative.';yaw=-Math.atan2(c.xyz[1],c.xyz[0]);pitch=0;zoom=1;$("star-space").showModal();requestAnimationFrame(spaceDraw);};
   $("star-space-close").onclick=()=>$("star-space").close();$("star-space").addEventListener('close',stopSpace);
@@ -552,6 +566,6 @@ const StarTracker = (() => {
     $("star-space-distance").textContent=`${Math.hypot(...current).toFixed(3)} pc from Solar System · ${year}`;
   }
   let drag=null;const canvas=$("star-space-canvas");canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY,yaw,pitch];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){yaw=drag[2]+(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.5,drag[3]+(e.clientY-drag[1])*.008));spaceDraw();}};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));spaceDraw();},{passive:false});new ResizeObserver(spaceDraw).observe(canvas);
-  return {paint,kinds,pick,open:openCard};
+  return {paint,kinds,pick,open:openCard,getResult:()=>result};
 })();
 

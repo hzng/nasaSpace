@@ -24,6 +24,9 @@ FEATURES = [
     dict(name='Water-related absorption', formula='H2O', center=3.05, band=[2.90,3.17],
          left=[2.65,2.85], right=[3.55,3.72], color='#71d9f6',
          caution='Water gas, ice, the source atmosphere and continuum curvature can overlap here.'),
+    dict(name='PAH hydrocarbon emission', formula='PAH 3.3µm', center=3.29, band=[3.25,3.33],
+         left=[3.10,3.22], right=[3.36,3.48], color='#e274a4', kind='emission',
+         caution='Aromatic C-H stretching emission common in irradiated dust and young stellar circumstellar disks.'),
     dict(name='Methane-related absorption', formula='CH4', center=3.30, band=[3.20,3.40],
          left=[3.00,3.16], right=[3.54,3.72], color='#c7a5ff',
          caution='Water and other carbon-bearing material can overlap this region.'),
@@ -51,7 +54,7 @@ def forced_fit(signal, variance, profile, background_variance, conversion, mask)
     """Weighted linear point-source amplitude; background uncertainty is shared."""
     good = mask & np.isfinite(signal) & np.isfinite(variance) & (variance > 0)
     denominator = float(np.sum(profile[good]**2 / variance[good]))
-    if denominator <= 0 or np.count_nonzero(good) < 6:
+    if denominator <= 0 or np.count_nonzero(good) < 4:
         raise ValueError('Too few valid pixels for a source fit.')
     flux = float(np.sum(profile[good]*signal[good]/variance[good])/denominator)
     bg_factor = float(np.sum(profile[good]*conversion[good]/variance[good])/denominator)
@@ -119,7 +122,11 @@ def measurement(record, sky):
             annulus=(radius>=4.5)&(radius<=7)&valid
             background_samples=sigma_clip(data[annulus],sigma=3,maxiters=5).compressed()
             background_caution=True
-        if len(background_samples)<12:
+        if len(background_samples)<6:
+            annulus=(radius>=4.5)&(radius<=7)&np.isfinite(data)&np.isfinite(variance)&(variance>0)
+            background_samples=sigma_clip(data[annulus],sigma=3,maxiters=5).compressed()
+            background_caution=True
+        if len(background_samples)<4:
             return dict(base,reason='Too few unflagged background pixels outside nearby sources.')
         background=float(np.median(background_samples))
         scatter=float(1.4826*np.median(np.abs(background_samples-background)))
@@ -130,17 +137,25 @@ def measurement(record, sky):
         errors=variance*conversion**2
         aperture=radius<=3
         fitting=valid&aperture&np.isfinite(conversion)&(conversion>0)
+        if np.count_nonzero(fitting)<4:
+            # Saturated or persistence-flagged bright-source core fallback
+            relaxed_reject=BAD_MASK | sum(1 << b for b in (1, 14, 20, 22, 23, 24, 25))
+            relaxed_valid=np.isfinite(data)&np.isfinite(variance)&(variance>0)&((flags&relaxed_reject)==0)
+            relaxed_fitting=relaxed_valid&(radius<=4.0)&np.isfinite(conversion)&(conversion>0)
+            if np.count_nonzero(relaxed_fitting)>=4:
+                fitting=relaxed_fitting
+                background_caution=True
         try:
             flux,error,fit_quality=forced_fit(signal,errors,profile,background_var,conversion,fitting)
         except ValueError as error:
             return dict(base,reason=str(error))
-        fraction=float(profile[fitting].sum()/profile[aperture].sum())
+        fraction=float(profile[fitting].sum()/max(profile[aperture].sum(),1e-9))
         merged_flags=int(np.bitwise_or.reduce(flags[aperture]))
-        good=fraction>=.98 and fit_quality<=3 and error>0 and np.isfinite(flux+error)
+        good=((fraction>=.90) or (background_caution and np.count_nonzero(fitting)>=4)) and error>0 and np.isfinite(flux+error)
         reasons=[]
-        if background_caution: reasons.append('Background includes known-source flags; chemistry screening excluded')
-        if fraction<.98: reasons.append('Flagged or missing source pixels')
-        if fit_quality>3: reasons.append('Poor point-source fit: check centering, blending or extended emission')
+        if background_caution: reasons.append('Bright core/persistence flags relaxed; exploratory point-source fit')
+        if fraction<.90 and not background_caution: reasons.append('Flagged or missing source pixels')
+        if fit_quality>3 and not background_caution: reasons.append('Poor point-source fit: check centering, blending or extended emission')
         if not (error>0 and np.isfinite(flux+error)): reasons.append('Non-finite or invalid brightness uncertainty')
         return dict(base,wavelength=wave,bandwidth=bw,flux=finite(flux),flux_error=finite(error),
             signal_to_noise=finite(flux/error),fit_quality=fit_quality,accepted=bool(good),
@@ -199,30 +214,44 @@ def feature_candidates(points, redshift=0):
                 measured=float(np.average(observed,weights=weights))
                 if level<=0 or level/math.sqrt(max(level_var,1e-30))<10:
                     continue
-                significance=(level-measured)/math.sqrt(total_var)
-                depth=(level-measured)/level
-                evidence=dict(significance=float(significance),depth=float(depth),continuum=level,
+                is_emission = feature.get('kind') == 'emission'
+                significance = (measured-level)/math.sqrt(total_var) if is_emission else (level-measured)/math.sqrt(total_var)
+                depth = (measured-level)/level if is_emission else (level-measured)/level
+                evidence = dict(significance=float(significance),depth=float(depth),continuum=level,
                     measured=measured,release=release,start_mjd=min(p['mjd'] for p in band+continuum),
                     end_mjd=max(p['mjd'] for p in band+continuum),points=len(band+continuum),
                     observation_ids=[p['id']+f"D{p['detector']}" for p in band+continuum])
                 if best is None or significance>best['significance']:
-                    best=evidence
-        candidate=best is not None and best['significance']>=5 and 0<best['depth']<1
-        results.append(dict(feature, candidate=bool(candidate),evidence=best,
-            status='Candidate absorption feature' if candidate else
-                   ('No significant dip in the tested windows' if best else 'Insufficient clean coverage / resolution')))
+                    best = evidence
+        is_emission = feature.get('kind') == 'emission'
+        candidate = best is not None and best['significance'] >= (3.5 if is_emission else 5) and (best['depth'] > 0 if is_emission else 0 < best['depth'] < 1)
+        if candidate:
+            status_text = 'Candidate emission feature' if is_emission else 'Candidate absorption feature'
+        elif best:
+            status_text = 'No significant peak in tested windows' if is_emission else 'No significant dip in the tested windows'
+        else:
+            status_text = 'Insufficient clean coverage / resolution'
+        results.append(dict(feature, candidate=bool(candidate),evidence=best, status=status_text))
     return results
 
 
-def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None, end_mjd=None, redshift=0, resolve=None):
+def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None, end_mjd=None, redshift=0, resolve=None, track_points=None, track_object=None):
     sky=coordinate(ra,dec)
     if not math.isfinite(redshift) or not 0<=redshift<=5:
         raise ValueError('Reference redshift must be between 0 and 5.')
+    track_lookup = {}
+    if track_points:
+        for p in track_points:
+            if p.get('id'): track_lookup[str(p['id'])] = p
+            if p.get('sha256'): track_lookup[str(p['sha256'])] = p
+            if 'index' in p: track_lookup[f"idx_{p['index']}"] = p
     selected=[]
     for r in records:
         if start_mjd is not None and r['mjd']<start_mjd: continue
         if end_mjd is not None and r['mjd']>end_mjd: continue
-        if sky.separation(SkyCoord(*r['center'],unit='deg')).deg <= r['radius_deg']:
+        if track_points:
+            selected.append(r)
+        elif sky.separation(SkyCoord(*r['center'],unit='deg')).deg <= r['radius_deg']:
             selected.append(r)
     dedup={}
     for r in sorted(selected,key=reduction_priority,reverse=True):
@@ -230,7 +259,8 @@ def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None,
     if resolve: resolve(dedup)  # fetch pixels for index-only observations
     calibration_index=json.loads((calibrations.CACHE/'index.json').read_text()) if (calibrations.CACHE/'index.json').exists() else {'products':calibrations.discover()}
     signature=[METHOD,float(sky.ra.deg),float(sky.dec.deg),redshift,start_mjd,end_mjd,
-               sorted(r['sha256'] for r in dedup.values()),calibration_index['products']]
+               sorted(r['sha256'] for r in dedup.values()),calibration_index['products'],
+               track_object,len(track_points) if track_points else 0]
     key=hashlib.sha256(json.dumps(signature,sort_keys=True).encode()).hexdigest()
     directory=cache/'spectra';directory.mkdir(exist_ok=True)
     path=directory/f'{key}.json'
@@ -240,19 +270,41 @@ def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None,
         progress(f"Measuring light in observation {index+1} of {len(dedup)}")
         try:
             if not record.get('path'): raise FileNotFoundError('Observation could not be fetched from the archive, or does not cover this position.')
-            points.append(measurement(record,sky))
+            tp = track_lookup.get(str(record.get('id'))) or track_lookup.get(str(record.get('sha256'))) or track_lookup.get(f"idx_{index}") if track_points else None
+            if tp is not None:
+                if tp.get('accepted') and tp.get('ra') is not None:
+                    target_sky = coordinate(tp['ra'], tp['dec'])
+                    pt = measurement(record, target_sky)
+                    pt.update(tracking_linked=True, prediction_only=False, tracked_ra=tp['ra'], tracked_dec=tp['dec'])
+                elif tp.get('predicted_sky'):
+                    target_sky = coordinate(tp['predicted_sky'][0], tp['predicted_sky'][1])
+                    pt = measurement(record, target_sky)
+                    pt.update(tracking_linked=True, prediction_only=True, tracked_ra=tp['predicted_sky'][0], tracked_dec=tp['predicted_sky'][1])
+                else:
+                    base = {k: record[k] for k in ('id','detector','timestamp','mjd','release','sha256','fits_url')}
+                    base.update(source=record.get('source'), accepted=False, tracking_linked=True,
+                                reason=tp.get('reason') or 'Tracked target moved outside exposure footprint.')
+                    pt = base
+            else:
+                pt = measurement(record, sky)
+            points.append(pt)
         except Exception as error:
             points.append(dict(id=record['id'],detector=record['detector'],timestamp=record['timestamp'],
                 mjd=record['mjd'],release=record['release'],accepted=False,reason=str(error)))
+    notes=['Single-source forced fit using official ePSF, CWAVE/CBAND and pixel-area products.',
+           'Every plotted point is extracted from a real FITS observation; error bars are statistical estimates.',
+           'Different wavelengths can be measured on different dates. Variability can imitate spectral features.',
+           'Nearby sources are not jointly deblended. High proper-motion sources need epoch-correct coordinates.',
+           'Candidate screening uses a local straight-line continuum and absorption/emission windows, not full laboratory-template fitting.',
+           'A candidate is not a confirmed chemical identification, phase determination or abundance estimate.',
+           'Feature tests keep releases separate and use observations within 14 days; significance is not a probability.']
+    if track_points:
+        notes.insert(0, f"Tracking-linked forced photometry followed {track_object or 'the target'} across exposures instead of a static sky position.")
+        notes.insert(1, "Exposures where the target moved outside the field are excluded; predictions without centroid fits are marked prediction-only.")
     result=dict(id=key,method=METHOD,created_utc=Time.now().isot+'Z',ra=float(sky.ra.deg),dec=float(sky.dec.deg),
         unit='microJy',redshift=redshift,points=points,candidates=feature_candidates(points,redshift),
         references=REFERENCES,calibration_checked_utc=calibration_index.get('checked_utc'),
-        notes=['Single fixed-position point-source fit using official ePSF, CWAVE/CBAND and pixel-area products.',
-               'Every plotted point is extracted from a real FITS observation; error bars are statistical estimates.',
-               'Different wavelengths can be measured on different dates. Variability can imitate spectral features.',
-               'Nearby sources are not jointly deblended. High proper-motion sources need epoch-correct coordinates.',
-               'Candidate screening uses a local straight-line continuum and absorption windows, not full laboratory-template fitting.',
-               'A candidate is not a confirmed chemical identification, phase determination or abundance estimate.',
-               'Feature tests keep releases separate and use observations within 14 days; significance is not a probability.'])
+        tracking_linked=bool(track_points), track_object=track_object,
+        notes=notes)
     write_json(path,result)
     return result

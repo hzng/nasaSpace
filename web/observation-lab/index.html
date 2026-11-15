@@ -18,9 +18,9 @@
   <link rel="stylesheet" href="css/responsive.css?v=16">
   <link rel="stylesheet" href="css/overrides.css?v=16">
   <script src="app.js?v=17" defer></script>
-  <script src="light.js?v=7" defer></script>
+  <script src="light.js?v=8" defer></script>
   <script src="universe.js?v=3" defer></script>
-  <script src="tracking.js?v=16" defer></script>
+  <script src="tracking.js?v=17" defer></script>
   <script src="ui-select.js?v=2" defer></script>
 <link rel="stylesheet" href="planet-x.css"></head>
 <body>
@@ -313,6 +313,9 @@
               <label title="Reference redshift z">z
                 <input id="light-redshift" type="number" value="0" min="0" max="5" step="0.001">
               </label>
+              <label class="check-label" id="light-track-toggle-wrap" hidden title="Measure light following the tracked moving target across exposures">
+                <input type="checkbox" id="light-follow-track" checked> Tracked: <span id="light-track-obj-name">Target</span>
+              </label>
               <label class="check-label">
                 <input type="checkbox" id="light-review" checked> Flagged
               </label>
@@ -469,6 +472,7 @@
               <button id="track-star" type="button" class="btn-brass">Track point</button>
               <button id="track-anchor" type="button" class="btn-outline" disabled aria-pressed="false" title="Needs a clicked point first. Then step to another frame and click the moving object to anchor its path.">Pick 2nd</button>
               <button id="track-3d" type="button" class="btn-outline" disabled title="Needs a tracked Gaia DR3 star with a reliable distance (parallax over 20 times its error, RUWE below 1.4).">3D motion</button>
+              <button id="track-spectrum" type="button" class="btn-outline" disabled title="Measure light along the tracked moving path across exposures">Tracked light</button>
               <button id="track-clear" type="button" class="btn-ghost">Clear</button>
             </div>
             <p id="track-help" class="track-help">Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.</p>

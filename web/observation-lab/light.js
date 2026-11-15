@@ -58,16 +58,32 @@ const LightLab = (() => {
     $("light-position").textContent=`${point.ra.toFixed(4)}°, ${point.dec.toFixed(4)}°`;
     if (result) note("Point changed");
   });
+  window.addEventListener("star-track-ready",event => {
+    const t = event.detail;
+    if (t?.points?.length) {
+      if ($("light-track-toggle-wrap")) $("light-track-toggle-wrap").hidden = false;
+      const name = t.ephemeris?.object || t.catalog?.name || $("track-object")?.value.trim() || 'target';
+      if ($("light-track-obj-name")) $("light-track-obj-name").textContent = name;
+      note(`Track ready for ${name}. Light measurement follows moving path.`);
+    }
+  });
   $("light-center").onclick=() => { point=null; generation++; showDefault(); };
 
-  async function measure() {
+  async function measure(opts={}) {
     if (!state.session?.frames.length || state.loading) { note("Open sky first"); return; }
     const version=++generation;
+    const track = typeof StarTracker !== 'undefined' && StarTracker.getResult ? StarTracker.getResult() : null;
+    const followTrack = Boolean(opts.follow_track || ($("light-follow-track")?.checked && track?.points?.length));
     const selection=point || defaultSelection();
+    const trackName = track?.ephemeris?.object || track?.catalog?.name || $("track-object")?.value.trim() || 'Tracked target';
     const payload={session:state.session.id,frame:selection.frame ?? state.index,x:selection.x,y:selection.y,
-      scope:$("light-scope").value,redshift:Number($("light-redshift").value)};
+      scope:$("light-scope").value,redshift:Number($("light-redshift").value),
+      follow_track: followTrack,
+      track_points: followTrack ? track.points : undefined,
+      track_object: followTrack ? trackName : undefined};
     $("measure-light").disabled=true;
-    note("Measuring…");
+    if ($("track-spectrum")) $("track-spectrum").disabled = true;
+    note(followTrack ? `Measuring ${trackName} along track…` : "Measuring…");
     try {
       const job=await api("/observation-lab/api/spectrum",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       while (true) {
@@ -94,7 +110,10 @@ const LightLab = (() => {
         await new Promise(resolve=>setTimeout(resolve,500));
       }
     } catch(error) { if(version===generation) note(error.message); }
-    finally { $("measure-light").disabled=false; }
+    finally {
+      $("measure-light").disabled=false;
+      if ($("track-spectrum")) $("track-spectrum").disabled = false;
+    }
   }
 
   function selectedPoints() {
@@ -215,7 +234,10 @@ const LightLab = (() => {
         ? `${subscript(candidate.formula)} · ${shifted.toFixed(2)} µm`
         : `${subscript(candidate.formula)} · ${candidate.center.toFixed(2)} µm`;
       title.style.color=candidate.color;
-      statusText.textContent=candidate.evidence ? (candidate.candidate ? `${candidate.evidence.significance.toFixed(1)}σ dip` : "No dip") : "Low coverage";
+      const isEm = candidate.kind === "emission";
+      statusText.textContent=candidate.evidence
+        ? (candidate.candidate ? `${candidate.evidence.significance.toFixed(1)}σ ${isEm ? "peak" : "dip"}` : (isEm ? "No peak" : "No dip"))
+        : "Low coverage";
       sub.textContent=candidate.evidence ? `${candidate.evidence.points} pts · ${candidate.evidence.release}` : "Need continuum";
       card.title=`${candidate.status}\n${candidate.caution}`;
       card.append(title,statusText,sub);parent.insertBefore(card,parent.querySelector(".candidate-summary"));
@@ -227,10 +249,20 @@ const LightLab = (() => {
     const table=document.createElement("table"),head=document.createElement("thead"),row=document.createElement("tr");
     for(const label of ["Date","Band","µm","Flux (µJy)","Status"]){const th=document.createElement("th");th.textContent=label;row.append(th);}head.append(row);table.append(head);
     const body=document.createElement("tbody");
-    result.points.slice(0,shownRows).forEach(p=>{const tr=document.createElement("tr");const fluxText=p.flux==null?"—":`${fmt(p.flux)} ± ${fmt(p.flux_error)}`;for(const value of [p.timestamp.slice(0,10),`D${p.detector} · ${p.release}`,fmt(p.wavelength),fluxText,p.reason||"OK"]){const td=document.createElement("td");td.textContent=value;tr.append(td);}body.append(tr);});
+    result.points.slice(0,shownRows).forEach(p=>{
+      const tr=document.createElement("tr");
+      const fluxText=p.flux==null?"—":`${fmt(p.flux)} ± ${fmt(p.flux_error)}`;
+      const prefix=p.tracking_linked ? (p.prediction_only ? "[Pred] " : "[Tracked] ") : "";
+      const statusText=prefix + (p.reason || "OK");
+      for(const value of [p.timestamp.slice(0,10),`D${p.detector} · ${p.release}`,fmt(p.wavelength),fluxText,statusText]){
+        const td=document.createElement("td");td.textContent=value;tr.append(td);
+      }
+      body.append(tr);
+    });
     table.append(body);parent.append(table);$("more-measurements").hidden=shownRows>=result.points.length;
   }
-  $("measure-light").onclick=measure;
+  window.measureLight=measure;
+  $("measure-light").onclick=()=>measure();
   $("more-measurements").onclick=()=>{shownRows+=100;renderTable();};
   for(const id of ["light-review","light-release","time-wave","time-tolerance"])$(id).onchange=render;
   $("light-redshift").onchange=()=>{if(result) note("Redshift updated");};

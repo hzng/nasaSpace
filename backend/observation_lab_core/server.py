@@ -423,7 +423,12 @@ def create_spectrum(job_id, payload):
             missing=[r for r in chosen.values() if not available(r) and r.get('source')]
             if missing:
                 chosen.update(fetch_cutouts(missing,float(sky.ra.deg),float(sky.dec.deg),5,progress,[],start,end))
-        result=extract(records,sky.ra.deg,sky.dec.deg,CACHE,progress,start,end,float(payload.get('redshift',0)),resolve)
+        track_points=payload.get('track_points')
+        track_object=payload.get('track_object')
+        follow_track=bool(payload.get('follow_track') and track_points)
+        result=extract(records,sky.ra.deg,sky.dec.deg,CACHE,progress,start,end,float(payload.get('redshift',0)),resolve,
+                       track_points=track_points if follow_track else None,
+                       track_object=track_object if follow_track else None)
         result['scope']=scope
         with LOCK:
             JOBS[job_id].update(status='complete',stage='Light measurements ready',result=result)
