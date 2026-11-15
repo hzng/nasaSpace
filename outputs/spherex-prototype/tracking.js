@@ -1,8 +1,28 @@
 "use strict";
 const StarTracker = (() => {
   let result=null, choice=null, anchor2=null, awaitingAnchor2=false, version=0, timer=null, yaw=.6, pitch=.3, zoom=1;
+  // Conditions mirror tracking.py: Gaia match only for non-ephemeris, non-anchor targets (lines 516-518, 240),
+  // and xyz only when parallax/error > 20 and RUWE < 1.4 (lines 243-244); tracking.js enables the button on catalog.xyz.
+  const HELP_IDLE="Pick 2nd needs a clicked point first. 3D motion needs a tracked Gaia star with a reliable distance.";
   const setText=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
+  const PRED='#b9a3f5', BAD='#f0806e';
+  let typedObject=false, identity=null, idSeq=0, idText='';
+  // A clicked star's name is for reading only; just Solar System objects go to JPL Horizons
+  const toJPL=()=>{const v=$("track-object").value.trim();return identity&&v===identity.name?(identity.horizons||''):v;};
+  // A named object is tracked at its JPL position (tracking.py warns about the click distance only afterwards), so say so up front
+  const noteObject=()=>{const v=$("track-object").value.trim();$("track-object-note").hidden=!toJPL();setText("track-object-note",`Tracks ${v} at its JPL-predicted position, not the pixel you click.`);};
+  const prefillObject=()=>{if(!typedObject)$("track-object").value=state.field==='vesta'?'Vesta':'';noteObject();};
+  // Busy state: Track point says it is working and Clear becomes Cancel; clear() and the run's end restore both
+  // While busy, #track-status shows each stage silently; the hidden announcer speaks only start, finish and failure
+  const announcer=document.createElement("p");announcer.className="sr-only";announcer.setAttribute("role","status");$("track-status").after(announcer);
+  const announce=msg=>{announcer.textContent=msg;};
+  const setBusy=busy=>{$("track-star").textContent=busy?"Tracking…":"Track point";setText("track-clear",busy?"Cancel":"Clear");$("track-status")[busy?"removeAttribute":"setAttribute"]("role","status");};
+  // Editing the object invalidates a running request, so its answer is never shown under the new name
+  $("track-object").addEventListener('input',()=>{typedObject=true;noteObject();version++;if($("track-star").disabled){$("track-star").disabled=false;setBusy(false);$("track-status").textContent="Object changed. Press Track point to run again.";}});
   const compass=deg=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8];
+
+  const fmtSpeed=m=>m.preferred_unit==='hr'?`${m.speed_arcsec_per_hr.toFixed(1)} ″/hr`:`${m.speed_arcsec_per_year.toFixed(2)} ″/yr`;
+  const fmtHead=m=>`${m.heading_deg.toFixed(0)}° ${compass(m.heading_deg)}`;
 
   function resetAnchorBtn(){
     awaitingAnchor2=false;
@@ -12,17 +32,21 @@ const StarTracker = (() => {
 
   function clear() {
     version++;result=null;choice=null;anchor2=null;
+    dropCard();$("track-path").hidden=true;
     resetAnchorBtn();
     $("track-result").hidden=true;
     $("track-3d").disabled=true;
-    $("track-star").disabled=false;
-    $("track-status").textContent="Click a star or asteroid, then track its path.";
+    setText("track-help",HELP_IDLE);
+    $("track-star").disabled=false;setBusy(false);
+    $("vesta-callout").hidden=false;
+    $("track-status").textContent="Click a star or asteroid, then track its path.";$("track-status").classList.remove("track-error");
     setText("track-kind-pill","Ready");
     setText("kpi-speed","—");setText("kpi-heading","—");setText("kpi-change","—");setText("kpi-points","—");
     draw();
+    updateLegend();
   }
 
-  window.addEventListener("sky-session-ready",clear);
+  window.addEventListener("sky-session-ready",()=>{idSeq++;identity=null;clear();prefillObject();});
   window.addEventListener("sky-point-picked",event=>{
     if(awaitingAnchor2 && choice && event.detail.frame !== choice.frame){
       anchor2=event.detail;
@@ -30,13 +54,39 @@ const StarTracker = (() => {
       $("track-status").textContent=`Anchor 2 locked (frame ${anchor2.frame+1}). Ready to track moving path.`;
       return;
     }
+    // Stepping frames re-inspects the same pixel; that must not wipe a finished track or ask the catalogs again.
+    const same=choice&&event.detail.x===choice.x&&event.detail.y===choice.y;
+    if(result&&same)return;
+    if(!same)identity=null;  // before clear() redraws, so the previous name is not shown on the new click
     clear();
     choice=event.detail;
     if($("track-anchor"))$("track-anchor").disabled=false;
-    $("track-status").textContent=`Selected ${choice.ra.toFixed(5)}°, ${choice.dec.toFixed(5)}°. Ready to track.`;
+    if(same)$("track-status").textContent=idText;
+    else identify(choice);
   });
 
-  $("track-clear").onclick=clear;
+  // Names the clicked source (asteroids and comets: IMCCE SkyBoT; stars: SIMBAD) and puts the name in the object box
+  async function identify(c){
+    const token=++idSeq, box=$("track-object"), where=`Selected ${c.ra.toFixed(5)}°, ${c.dec.toFixed(5)}°.`;
+    identity=null;
+    $("track-status").textContent=idText=`${where} Identifying the source…`;
+    try{
+      const r=await api('/api/identify?'+new URLSearchParams({session:state.session.id,frame:c.frame,x:c.x,y:c.y}));
+      if(token!==idSeq)return;
+      const m=r.match, down=r.unavailable.length?` ${r.unavailable.join(', ')} did not answer.`:'';
+      identity=m?{...m,frame:c.frame,x:c.x,y:c.y}:null;
+      if(m){box.value=m.name;typedObject=false;}
+      else if(!typedObject)box.value='';
+      noteObject();
+      idText=m?`${m.name} · ${m.kind}, ${m.source}, ${m.separation_arcsec.toFixed(1)}″ from the ${r.centroided?'measured source':'clicked pixel'}. `
+        +(m.horizons?'Track point follows it with JPL Horizons.':'Track point measures it on every frame.')+down
+        :`${where} No catalogued object within ${r.tolerance_arcsec.toFixed(1)}″ (${r.searched.join(', ')}). Track point follows the source itself.${down}`;
+      $("track-status").textContent=idText;
+      draw();
+    }catch(e){if(token===idSeq)$("track-status").textContent=idText=`${where} Could not identify it: ${e.message}`;}
+  }
+
+  $("track-clear").onclick=()=>{idSeq++;identity=null;clear();};
   if($("track-anchor")){
     $("track-anchor").onclick=()=>{
       if(!choice){$("track-status").textContent="Pick the object on frame 1 first.";return;}
@@ -48,21 +98,36 @@ const StarTracker = (() => {
 
   $("track-star").onclick=async()=>{
     if(!state.session?.frames.length)return;
-    if(!choice){$("track-status").textContent="Click a star or moving object in the image first.";return;}
-    const token=++version;$("track-star").disabled=true;
+    const obj=toJPL();
+    if(!choice&&!obj){$("track-status").textContent="Click a star or moving object in the image first, or type a Solar System object.";return;}
+    const token=++version;$("track-star").disabled=true;setBusy(true);$("track-status").classList.remove("track-error");announce("Tracking started.");
+    // The walkthrough card has done its job once a track starts; it returns on Clear or a new pick
+    $("vesta-callout").hidden=true;
+    // Drop the previous result first: a failed rerun must not leave an earlier success on screen
+    result=null;$("track-result").hidden=true;$("track-3d").disabled=true;draw();
     try{
-      const body={session:state.session.id,frame:choice.frame,x:choice.x,y:choice.y};
-      if(anchor2)body.anchor2={frame:anchor2.frame,x:anchor2.x,y:anchor2.y};
+      const body={session:state.session.id,frame:choice?choice.frame:state.index};
+      if(choice){body.x=choice.x;body.y=choice.y;}
+      if(obj)body.object=obj;
+      if(anchor2&&!obj)body.anchor2={frame:anchor2.frame,x:anchor2.x,y:anchor2.y};
       const job=await api('/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       while(token===version){
         const status=await api('/api/jobs/'+job.id);if(token!==version)return;
         $("track-status").textContent=status.stage;
         if(status.status==='failed')throw new Error(status.stage);
-        if(status.status==='complete'){result=status.result;render();draw();break;}
+        if(status.status==='complete'){
+          result=status.result;render();draw();announce("Track ready. "+$("track-status").textContent);
+          // A fixed sky patch holds the object in only a few frames: open on one of them
+          const hit=result.ephemeris&&!result.points.find(p=>p.index===state.index)?.accepted&&result.points.find(p=>p.accepted);
+          if(hit)setFrame(hit.index);
+          // The verdict is the payoff: bring it into view in the side panel's own scroll
+          $("track-verdict").scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+          break;
+        }
         await new Promise(resolve=>setTimeout(resolve,600));
       }
-    }catch(e){if(token===version)$("track-status").textContent=e.message;}
-    finally{if(token===version)$("track-star").disabled=false;}
+    }catch(e){if(token===version){$("track-status").textContent=e.message;$("track-status").classList.add("track-error");announce("Tracking failed. "+e.message);}}
+    finally{if(token===version){$("track-star").disabled=false;setBusy(false);}}
   };
 
   function svgEl(parent,tag,attrs,text){
@@ -79,7 +144,8 @@ const StarTracker = (() => {
     svg.replaceChildren();
     const segs=result.segments||[];
     if(!segs.length){
-      svgEl(svg,'text',{x:200,y:78,fill:'#8a94a6','font-size':11,'text-anchor':'middle'},'Need 2+ distinct epochs for speed & change curve');
+      svgEl(svg,'text',{x:200,y:78,fill:'#86868b','font-size':11,'text-anchor':'middle'},'Need 2+ distinct epochs for speed & change curve');
+      svg.setAttribute('aria-label','Cumulative path and interval speed over time: needs 2 or more distinct epochs, none plotted.');
       return;
     }
     const useHr=result.motion?.preferred_unit==='hr';
@@ -88,7 +154,7 @@ const StarTracker = (() => {
     const maxSpd=Math.max(1e-3,...speeds);
     const t0=segs[0].mjd_start, span=Math.max(1e-3,segs[segs.length-1].mjd_end-t0);
     const x0=44,x1=360,yTop=18,yBot=118;
-    svgEl(svg,'path',{d:`M${x0} ${yBot}H${x1} M${x0} ${yTop}V${yBot}`,stroke:'#384150','stroke-width':1});
+    svgEl(svg,'path',{d:`M${x0} ${yBot}H${x1} M${x0} ${yTop}V${yBot}`,stroke:'#3a3a3c','stroke-width':1});
     // Step speed bars (cyan)
     const barW=Math.max(6,Math.min(26,(x1-x0)/Math.max(2,segs.length)*0.55));
     for(let i=0;i<segs.length;i++){
@@ -117,6 +183,38 @@ const StarTracker = (() => {
     }
     svgEl(svg,'text',{x:x0,y:138,fill:'#eab354','font-size':10},`Path 0→${maxCum.toFixed(1)}″`);
     svgEl(svg,'text',{x:x1,y:138,fill:'#71d9f6','font-size':10,'text-anchor':'end'},`Peak ${maxSpd.toFixed(2)} ${useHr?'″/hr':'″/yr'}`);
+    svg.setAttribute('aria-label',`Cumulative path and interval speed over time: ${segs.length} step${segs.length===1?'':'s'} over ${span.toFixed(1)} days, path length ${maxCum.toFixed(1)}″, peak step speed ${maxSpd.toFixed(2)} ${useHr?'″/hr':'″/yr'}.`);
+  }
+
+  const f=(v,d=1)=>v==null?'n/a':Number(v).toFixed(d);
+  function predTip(p){
+    if(!p.predicted_sky)return '';
+    const r=p.rate_arcsec_per_hr;
+    return `\nJPL predicted RA ${f(p.predicted_sky[0],5)}° Dec ${f(p.predicted_sky[1],5)}°`
+      +(p.offset_arcsec!=null?`\nOffset (measured − predicted) ${f(p.offset_arcsec)}″ (E ${f(p.offset_east_arcsec)}″, N ${f(p.offset_north_arcsec)}″), tolerance ${f(p.tolerance_arcsec)}″${p.within_tolerance===false?' · OUTSIDE TOLERANCE':''}`:'')
+      +(r?`\nRate ${f(r[0],2)}″/hr RA·cosDec, ${f(r[1],2)}″/hr Dec (apparent-coordinate rate at that instant; includes the spacecraft's orbital motion, so it is not the speed between exposures)`:'')
+      +`\nDistance ${f(p.delta_au,3)} au · light time ${f(p.light_time_min)} min`;
+  }
+  function renderEphemeris(e){
+    $("track-eph").hidden=!e;
+    if(!e)return;
+    setText("track-source",`${e.source} · ${e.object} · observer: ${e.observer} · retrieved ${(e.retrieved_utc||'').replace('T',' ').slice(0,16)} UTC${e.from_cache?' · cached':''}`);
+    setText("track-timescale",`Time scale: ${e.time_scale}`);
+    $("track-warnings").replaceChildren(...(e.warnings||[]).map(t=>{const li=document.createElement('li');li.textContent='Warning: '+t;return li;}));
+    const flag=$("track-flag"), rule=`tolerance: ${e.tolerance_rule}`;
+    flag.hidden=false;
+    if(!e.compared){
+      setText("track-offset",`No frame could be compared with a measurement; ${rule}`);
+      flag.className='track-flag bad';flag.textContent='Prediction shown, not confirmed: no measured position to check it against.';
+    }else{
+      const total=result.points.length, missing=total-e.compared;
+      const rest=missing?` · ${missing} of ${total} frames have no usable measurement, so the prediction is unconfirmed there`:'';
+      setText("track-offset",`Offset median ${f(e.offset_median_arcsec)}″ · max ${f(e.offset_max_arcsec)}″ over ${e.compared} of ${total} frames · ${rule}`);
+      flag.className='track-flag'+(e.flagged?' bad':missing?' partial':'');
+      flag.textContent=e.flagged?`⚠ ${e.flagged} of ${e.compared} compared frames disagree with the ephemeris beyond tolerance${rest}`
+        :missing?`${e.compared} of ${total} frames compared, all within tolerance${rest}`
+        :`All ${total} frames agree with the ephemeris within tolerance`;
+    }
   }
 
   function render(){
@@ -124,19 +222,52 @@ const StarTracker = (() => {
     const c=result.catalog, m=result.motion, ch=result.change;
     const kindLabel=result.target_kind==='asteroid'?'Asteroid':(c?'Gaia star':'Moving source');
     $("track-result").hidden=false;
+    dropCard();
+    const hasPath=result.points.some(p=>p.predicted);
+    $("track-path").hidden=!hasPath;
     $("track-3d").disabled=!c?.xyz;
+    setText("track-help",c?.xyz?"3D motion is ready for this Gaia star.":
+      result.target_kind==='asteroid'?"3D motion is unavailable: Solar System and 2-frame targets are not matched to the Gaia catalog.":
+      !c?"3D motion is unavailable: no unique Gaia DR3 match within 6.15″ of this source.":
+      "3D motion is unavailable: the Gaia parallax is too uncertain (needs parallax over 20× its error and RUWE below 1.4).");
+    if(!hasPath)setText("track-help",$("track-help").textContent+" No predicted path: this track had no catalog match, archived path or 2nd pick to predict from.");
     setText("track-kind-pill",kindLabel);
+    updateLegend();
     const wingCount=points.filter(p=>p.fit_mode==='wing').length;
     const fitNote=wingCount?` (${wingCount} wing-fit)`:'';
     $("track-status").textContent=`${points.length} / ${result.points.length} measured${fitNote}. ${c?c.name:result.catalog_note}`;
 
     if(m){
       const useHr=m.preferred_unit==='hr';
-      setText("kpi-speed",useHr?`${m.speed_arcsec_per_hr.toFixed(1)} ″/hr`:`${m.speed_arcsec_per_year.toFixed(2)} ″/yr`);
-      setText("kpi-heading",`${m.heading_deg.toFixed(0)}° ${compass(m.heading_deg)}`);
+      setText("kpi-speed",fmtSpeed(m));
+      setText("kpi-heading",fmtHead(m));
     }else{
       setText("kpi-speed","—");setText("kpi-heading","—");
     }
+    const eph=result.ephemeris, em=eph?.motion;
+    setText("kpi-speed-pred",em?`predicted ${fmtSpeed(em)}`:"");
+    setText("kpi-heading-pred",em?`predicted ${fmtHead(em)}`:"");
+    // Verdict first: only the measured and predicted values already computed above
+    const both=!!(m&&em);
+    setText("verdict-head",!m?'Measure at least two epochs to fit velocity.'
+      :both?`Speed within ${(Math.abs(m.speed_arcsec_per_year-em.speed_arcsec_per_year)/em.speed_arcsec_per_year*100).toFixed(1)}% of JPL`
+      :`${fmtSpeed(m)} toward ${fmtHead(m)}`);
+    $("verdict-head").classList.toggle("pending",!m);
+    // The sample size is part of the claim, so it sits inside the headline; under 5 measured frames it reads as low confidence
+    const low=!!m&&points.length<5;
+    $("verdict-head").classList.toggle("low",low);
+    if(m){
+      const sample=document.createElement("span");sample.className="verdict-sample";
+      sample.textContent=`${low?"Low confidence · ":""}${points.length} of ${result.points.length} frames measured`;
+      $("verdict-head").append(sample);
+    }
+    $("verdict-compare").hidden=!both;
+    $("track-kpis").classList.toggle("compared",both);
+    if(both){
+      setText("verdict-m-speed",fmtSpeed(m));setText("verdict-m-head",`toward ${fmtHead(m)}`);
+      setText("verdict-p-speed",fmtSpeed(em));setText("verdict-p-head",`toward ${fmtHead(em)}`);
+    }
+    renderEphemeris(eph);
     setText("kpi-change",ch?ch.state:`${points.length>=2?'Linear':'Single epoch'}`);
     setText("kpi-points",`${points.length} / ${result.points.length} pts`);
 
@@ -149,21 +280,45 @@ const StarTracker = (() => {
     const gaiaMsg=c?.velocity?'Gaia 3D trajectory ready.':c?.xyz?'Gaia 3D position ready (no RV).':'';
     $("track-summary").textContent=driftMsg+chMsg+gaiaMsg;
 
-    const svg=$("track-plot");svg.replaceChildren();if(!points.length)return;
-    const span=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec));
+    const svg=$("track-plot");svg.replaceChildren();
+    const preds=eph?result.points.filter(p=>p.predicted_east_arcsec!=null).sort((a,b)=>a.mjd-b.mjd):[];
+    // With no centroid at all the predicted path is still drawn, and the change chart never keeps an older result
+    svg.setAttribute('aria-label','Sky trajectory relative to the reference observation: no measured or predicted positions to plot.');
+    if(!points.length&&!preds.length){renderChangeChart();return;}
+    const pext=p=>Math.max(Math.abs(p.predicted_east_arcsec),Math.abs(p.predicted_north_arcsec));
+    const fit=Math.max(1,...points.map(p=>Math.max(Math.abs(p.east_arcsec),Math.abs(p.north_arcsec))+p.error_arcsec));
+    // Axes follow the measured points; a prediction reaching far past them is clipped instead of shrinking them to one dot
+    const span=points.length?Math.max(fit,...preds.map(pext).filter(v=>v<=3*fit)):Math.max(1,...preds.map(pext));
+    const offPlot=preds.some(p=>pext(p)>span*1.25);
     const scale=64/span, ox=200, oy=82;
-    svgEl(svg,'path',{d:'M60 82H340 M200 12V152',stroke:'#384150'});
+    svg.setAttribute('aria-label',`Sky trajectory relative to the reference observation, within ±${span.toFixed(1)}″: ${points.length} of ${result.points.length} frames measured`
+      +(preds.length?`, ${preds.length} JPL-predicted positions${offPlot?' (path continues off-plot)':''}`:'')
+      +(eph?.compared?`, median measured − predicted offset ${f(eph.offset_median_arcsec)}″`:'')
+      +(m?`; net ${m.net_arcsec.toFixed(1)}″ toward ${fmtHead(m)} at ${fmtSpeed(m)}`:'')+'.');
+    svgEl(svgEl(svg,'clipPath',{id:'track-plot-clip'}),'rect',{x:0,y:0,width:400,height:160});
+    if(offPlot)svgEl(svg,'text',{x:392,y:12,fill:PRED,'font-size':10,'text-anchor':'end'},'JPL path continues off-plot');
+    svgEl(svg,'path',{d:'M60 82H340 M200 12V152',stroke:'#3a3a3c'});
     // Trajectory path line connecting measured positions chronologically
     if(points.length>=2){
       const d=points.map((p,idx)=>`${idx?'L':'M'}${(ox+scale*p.east_arcsec).toFixed(1)} ${(oy-scale*p.north_arcsec).toFixed(1)}`).join(' ');
-      svgEl(svg,'path',{d,fill:'none',stroke:result.target_kind==='asteroid'?'#eab354':'#68d391','stroke-width':1.8,'stroke-opacity':.75});
+      svgEl(svg,'path',{d,fill:'none',stroke:result.target_kind==='asteroid'?'#eab354':'#68d391','stroke-width':1.8,'stroke-opacity':.75,pathLength:1,class:'trace'});
       const pFirst=points[0], pLast=points[points.length-1];
       const ax1=ox+scale*pFirst.east_arcsec, ay1=oy-scale*pFirst.north_arcsec;
       const ax2=ox+scale*pLast.east_arcsec, ay2=oy-scale*pLast.north_arcsec;
       const ang=Math.atan2(ay2-ay1,ax2-ax1);
-      svgEl(svg,'path',{d:`M${ax2-7*Math.cos(ang-.45)} ${ay2-7*Math.sin(ang-.45)} L${ax2} ${ay2} L${ax2-7*Math.cos(ang+.45)} ${ay2-7*Math.sin(ang+.45)}`,fill:'none',stroke:'#f5f7fa','stroke-width':1.6});
+      svgEl(svg,'path',{d:`M${ax2-7*Math.cos(ang-.45)} ${ay2-7*Math.sin(ang-.45)} L${ax2} ${ay2} L${ax2-7*Math.cos(ang+.45)} ${ay2-7*Math.sin(ang+.45)}`,fill:'none',stroke:'#f5f5f7','stroke-width':1.6});
     }
-    svgEl(svg,'text',{x:10,y:170,fill:'#9fb0c4','font-size':10},`East → / North ↑ · ±${span.toFixed(1)}″ · green=core · cyan=wing`);
+    svgEl(svg,'text',{x:10,y:170,fill:'#a1a1a6','font-size':10},eph?`East → / North ↑ · ±${span.toFixed(1)}″ · solid=measured · dashed=predicted (JPL)`:`East → / North ↑ · ±${span.toFixed(1)}″ · green=core · cyan=wing`);
+    if(preds.length){
+      const px=p=>ox+scale*p.predicted_east_arcsec, py=p=>oy-scale*p.predicted_north_arcsec;
+      const svg=svgEl($("track-plot"),'g',{'clip-path':'url(#track-plot-clip)'});
+      for(const p of points)if(p.predicted_east_arcsec!=null)svgEl(svg,'line',{x1:ox+scale*p.east_arcsec,y1:oy-scale*p.north_arcsec,x2:px(p),y2:py(p),stroke:p.within_tolerance===false?BAD:PRED,'stroke-width':1,'stroke-opacity':.8});
+      const pd=preds.map((p,i)=>`${i?'L':'M'}${px(p).toFixed(1)} ${py(p).toFixed(1)}`).join(' ');
+      // The dashed JPL path draws on through a solid mask, in step with the measured trace
+      svgEl(svgEl(svg,'mask',{id:'jpl-draw',maskUnits:'userSpaceOnUse',x:0,y:0,width:400,height:180}),'path',{d:pd,fill:'none',stroke:'#fff','stroke-width':6,pathLength:1,class:'trace'});
+      svgEl(svg,'path',{d:pd,fill:'none',stroke:PRED,'stroke-width':1.6,'stroke-dasharray':'5 4',mask:'url(#jpl-draw)'});
+      for(const p of preds)svgEl(svg,'path',{d:`M${px(p)} ${py(p)-4}L${px(p)+4} ${py(p)}L${px(p)} ${py(p)+4}L${px(p)-4} ${py(p)}Z`,fill:'none',stroke:PRED,'stroke-width':1.3});
+    }
     for(const p of points){
       const x=ox+scale*p.east_arcsec, y=oy-scale*p.north_arcsec;
       const col=p.fit_mode==='wing'?'#71d9f6':'#68d391';
@@ -171,17 +326,43 @@ const StarTracker = (() => {
       const n=svgEl(svg,'circle',{cx:x,cy:y,r:3.4,fill:col,tabindex:0,role:'button','aria-label':p.timestamp});
       n.onclick=()=>setFrame(p.index);n.onkeydown=e=>{if(e.key==='Enter')setFrame(p.index);};
       const title=document.createElementNS('http://www.w3.org/2000/svg','title');
-      title.textContent=`${p.timestamp} (${p.fit_mode||'core'}) ΔE=${p.east_arcsec.toFixed(2)}″ ΔN=${p.north_arcsec.toFixed(2)}″`;
+      title.textContent=`${p.timestamp} (${p.fit_mode||'core'}) ΔE=${p.east_arcsec.toFixed(2)}″ ΔN=${p.north_arcsec.toFixed(2)}″`+predTip(p);
       n.append(title);
     }
     renderChangeChart();
   }
 
+  function kinds(){
+    if(!result||result.session!==state.session?.id)return {};
+    // Nothing is drawn on a frame without the object, so the legend lists nothing; the key still says a track exists
+    if(offView(state.index))return {offscreen:true};
+    const k={};
+    for(const p of result.points){
+      if(p.accepted)k[p.fit_mode==='wing'?'wing':'measured']=true;
+      else if(p.predicted)k.predicted=true;
+      if(p.predicted)k.path=true;
+    }
+    return k;
+  }
+
   function paint(ctx,frame,{side,left,top}){
+    // Name the clicked source next to the click, on the frame it was identified in (a moving object is elsewhere on other frames)
+    // Inside the saved target's gold box (±21 px) the box already names it
+    const at=identity&&$("markers").checked&&targetAt(frame), boxed=at&&Math.abs(at[0]-identity.x)*side<21&&Math.abs(at[1]-identity.y)*side<21;
+    if(identity&&!boxed&&!cur()&&frame.index===identity.frame)markLabel(ctx,identity.name,left+identity.x*side+14,top+identity.y*side-16,'#6cb8ff');
     if(!result||result.session!==state.session?.id)return;
     const p=result.points.find(pt=>pt.index===frame.index);if(!p)return;
     const ordered=result.points.filter(v=>v.accepted).sort((a,b)=>a.mjd-b.mjd);
     ctx.save();ctx.beginPath();ctx.rect(left,top,side,side);ctx.clip();
+
+    // The object is not on this frame's image: draw no path, say where it is instead
+    if(offView(frame.index)){
+      const seen=[...new Set(result.points.filter(inView).sort((a,b)=>a.mjd-b.mjd).map(v=>dateText(v.timestamp)))];
+      const noteY=card&&!card.classList.contains('dot-top')?top+side-62:top+66;  // away from the info card
+      markLabel(ctx,`${result.ephemeris?.object||result.catalog?.name||'The tracked object'} is not in this frame`,left+12,noteY,BAD);
+      markLabel(ctx,!seen.length?'It is outside the image on every frame':seen.length>3?`It is on the image on ${seen.length} dates, ${seen[0]} to ${seen.at(-1)}`:`It is on the image on ${seen.join(', ')}`,left+12,noteY+16,BAD);
+      ctx.restore();return;
+    }
 
     // Faded future/full measured trajectory
     if(ordered.length>=2){
@@ -190,9 +371,18 @@ const StarTracker = (() => {
       ctx.stroke();ctx.setLineDash([]);
     }
 
+    // JPL predicted track (dashed, purple) through every point with a prediction
+    const predTrack=result.ephemeris?result.points.filter(v=>v.predicted).sort((a,b)=>a.mjd-b.mjd):[];
+    if(predTrack.length){
+      ctx.strokeStyle=PRED;ctx.setLineDash([7,4]);ctx.lineWidth=1.6;ctx.beginPath();
+      predTrack.forEach((pt,idx)=>{const px=left+pt.predicted[0]*side,py=top+pt.predicted[1]*side;idx?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+      ctx.stroke();ctx.setLineDash([]);
+    }
+
     // Active breadcrumb path up to current frame
     const past=ordered.filter(v=>v.mjd<=p.mjd);
     const activeColor=result.target_kind==='asteroid'?'#f0c58a':'#68d391';
+    const markColor='#68d391';
     if(past.length>=1){
       ctx.strokeStyle=activeColor;ctx.lineWidth=2;ctx.beginPath();
       past.forEach((pt,idx)=>{const px=left+pt.xy[0]*side,py=top+pt.xy[1]*side;idx?ctx.lineTo(px,py):ctx.moveTo(px,py);});
@@ -203,12 +393,30 @@ const StarTracker = (() => {
       }
     }
 
+    // Predicted path (violet): hollow rings over the measured trail, so both stay visible where they coincide
+    const pred=predicted();
+    if(pred.length){
+      const at=pt=>[left+pt.predicted[0]*side,top+pt.predicted[1]*side];
+      ctx.strokeStyle='#b9a3f5';ctx.fillStyle='#b9a3f5';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+      if(pred.length>=2){ctx.beginPath();pred.forEach((pt,i)=>{const [x,y]=at(pt);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();}
+      ctx.setLineDash([]);
+      for(const pt of pred){const [x,y]=at(pt);ctx.lineWidth=pt===p?2.4:1.6;ctx.beginPath();ctx.arc(x,y,pt===p?7:5,0,Math.PI*2);ctx.stroke();}
+      const sel=pred.find(pt=>pt.index===selected);
+      if(sel){const [x,y]=at(sel);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,11,0,Math.PI*2);ctx.stroke();}
+    }
+    syncCard();
+
     const xy=p.accepted?p.xy:p.predicted;
     if(xy){
       const x=left+xy[0]*side, y=top+xy[1]*side;
-      const stroke=p.accepted?(p.fit_mode==='wing'?'#71d9f6':activeColor):'#eab354';
+      const bad=p.accepted&&p.within_tolerance===false;
+      const stroke=bad?BAD:p.accepted?(p.fit_mode==='wing'?'#71d9f6':markColor):'#b9a3f5';
       ctx.strokeStyle=stroke;ctx.lineWidth=1.8;ctx.setLineDash(p.accepted?[]:[4,4]);
-      ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+      ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();
+      // Box and name the Solar System object, so it is not mistaken for a neighbouring star
+      if(result.ephemeris)ctx.strokeRect(x-21,y-21,42,42);
+      ctx.setLineDash([]);
+      if(result.ephemeris)markLabel(ctx,result.ephemeris.object||'Tracked object',x-21,y-27,stroke);
 
       // Draw pixel velocity arrow along ordered path
       const nextPt=ordered.find(v=>v.mjd>p.mjd) || past[past.length-1];
@@ -226,12 +434,96 @@ const StarTracker = (() => {
         }
       }
 
-      ctx.font='600 12px Segoe UI';ctx.fillStyle=stroke;
       const label=p.accepted?(p.fit_mode==='wing'?'Wing fit':'Measured'):'Predicted';
-      ctx.fillText(label,x+23,y-12);
+      markLabel(ctx,label,x+23,y-12,stroke);
+      if(result.ephemeris&&p.predicted){
+        const qx=left+p.predicted[0]*side,qy=top+p.predicted[1]*side;
+        ctx.strokeStyle=PRED;ctx.lineWidth=2;ctx.beginPath();
+        ctx.moveTo(qx,qy-7);ctx.lineTo(qx+7,qy);ctx.lineTo(qx,qy+7);ctx.lineTo(qx-7,qy);ctx.closePath();ctx.stroke();
+        if(p.accepted&&p.offset_arcsec!=null)markLabel(ctx,`Δ ${p.offset_arcsec.toFixed(1)}″${bad?' · outside tolerance':''}`,x+23,y+4,stroke);
+        markLabel(ctx,'JPL predicted',qx+10,y+36,PRED);  // below the object box
+      }
+    }else if(!p.accepted){
+      // No measurement and no prediction to mark: say why on the image itself.
+      const noteY=card&&!card.classList.contains('dot-top')?top+side-62:top+66;  // away from the info card
+      markLabel(ctx,'Not measured in this frame',left+12,noteY,'#f0806e');
+      markLabel(ctx,String(p.reason||''),left+12,noteY+16,'#f0806e');
     }
     ctx.restore();
   }
+
+  // ---- Predicted path: hit test, info card ----
+  const cur=()=>result&&result.session===state.session?.id?result:null;
+  // On a frame's image only when measured there or predicted inside the image (the server keeps predictions up to 16 px outside)
+  const inView=p=>!!p&&(p.accepted||(!!p.predicted&&p.predicted.every(v=>v>=0&&v<=1)));
+  // Only a track with predictions (Horizons, Gaia, 2nd pick) knows the object left the image; a blind track just failed to measure
+  const offView=index=>!!cur()&&result.points.some(v=>v.predicted)&&!inView(result.points.find(v=>v.index===index));
+  function predicted(){return cur()?result.points.filter(p=>p.predicted).sort((a,b)=>a.mjd-b.mjd):[];}
+  function pick(px,py,{side,left,top}){
+    if(offView(state.index))return null;  // the path is hidden on this frame, so its dots cannot be clicked
+    let best=null,bd=Infinity;
+    for(const p of predicted()){
+      const d=Math.hypot(left+p.predicted[0]*side-px,top+p.predicted[1]*side-py);
+      if(d>9)continue;
+      const score=p.index===state.index?-1:d;
+      if(score<bd){bd=score;best=p;}
+    }
+    return best;
+  }
+  // Exact inverse gnomonic (TAN) projection of the north-up, east-left image grid.
+  function skyAt([x,y]){
+    const {ra:ra0,dec:dec0,fov}=state.session.options,r=Math.PI/180;
+    const w=fov/60*r,xi=-(x-.5)*w,eta=-(y-.5)*w,rho=Math.hypot(xi,eta),c=Math.atan(rho);
+    const d0=dec0*r,dec=Math.asin(Math.cos(c)*Math.sin(d0)+(rho?eta*Math.sin(c)*Math.cos(d0)/rho:0));
+    const ra=ra0*r+Math.atan2(xi*Math.sin(c),rho*Math.cos(d0)*Math.cos(c)-eta*Math.sin(d0)*Math.sin(c));
+    return {ra:((ra/r)%360+360)%360,dec:dec/r};
+  }
+  let selected=null,card=null;
+  function dropCard(){selected=null;if(card){card.remove();card=null;}}
+  function closeCard(){dropCard();if(result)draw();}
+  function syncCard(){
+    if(card)card.querySelector('[data-go]').disabled=selected===state.index;
+  }
+  function openCard(point){
+    if(!point||!cur())return;
+    selected=point.index;
+    const f=state.session.frames[point.index],list=predicted(),i=list.indexOf(point);
+    if(!card){
+      card=document.createElement('div');card.className='path-card';card.setAttribute('role','group');card.setAttribute('aria-label','Predicted position details');
+      $('primary-pane').append(card);
+    }
+    // shortcut: corner chosen from the unzoomed dot position; recompute on pan/zoom if the card ever hides the dot
+    card.classList.toggle('dot-right',point.predicted[0]>.5);card.classList.toggle('dot-top',point.predicted[1]<.5);
+    const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
+    const head=el('div','path-card-head'),close=el('button','path-card-close','\u00d7');
+    head.append(el('h3',null,'Predicted position'),close);
+    close.type='button';close.setAttribute('aria-label','Close');close.onclick=closeCard;
+    const body=el('div','path-card-body');body.setAttribute('aria-live','polite');
+    const row=(k,v)=>{const d=el('p');d.append(el('span','k',k),document.createTextNode(v));body.append(d);};
+    body.append(el('p','path-card-time',`${dateText(f.timestamp)} ${timeText(f.timestamp)} UTC \u00b7 ${f.release}`));
+    row('Based on: ',result.catalog?`Gaia DR3 position and proper motion \u00b7 ${result.catalog.name}`:(result.catalog_note||''));
+    const s=skyAt(point.predicted);
+    row('Predicted RA / Dec: ',`${s.ra.toFixed(5)}\u00b0, ${s.dec.toFixed(5)}\u00b0`);
+    if(point.accepted){
+      row('Status: ',point.fit_mode==='wing'?'Measured (wing fit)':'Measured');
+      const as=Math.hypot(point.xy[0]-point.predicted[0],point.xy[1]-point.predicted[1])*state.session.options.fov*60;
+      row('Measured \u2212 predicted: ',`${as.toFixed(2)}\u2033 (${(as/6.15).toFixed(2)} SPHEREx px)`);
+      row('Position uncertainty: ',`\u00b1${point.error_arcsec.toFixed(2)}\u2033${Number.isFinite(point.snr)?` \u00b7 S/N ${point.snr.toFixed(1)}`:''}`);
+    }else row('Status: ',`Not measured: ${point.reason}`);
+    const acts=el('div','path-card-actions');
+    const btn=(label,fn,attr)=>{const b=el('button','btn-outline btn-compact',label);b.type='button';b.onclick=fn;if(attr)b.setAttribute(attr,'');acts.append(b);return b;};
+    btn('Earlier',()=>openCard(list[i-1])).disabled=i<=0;
+    btn('Later',()=>openCard(list[i+1])).disabled=i>=list.length-1;
+    btn('Go to this frame',()=>setFrame(point.index),'data-go');
+    card.replaceChildren(head,body,acts);
+    syncCard();draw();
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&card)closeCard();});
+  $('track-path').onclick=()=>{
+    const l=predicted();if(!l.length)return;
+    const t=(result.points.find(p=>p.index===state.index)||{}).mjd??l[0].mjd;
+    openCard(l.reduce((a,b)=>Math.abs(b.mjd-t)<Math.abs(a.mjd-t)?b:a));
+  };
   $("track-export").onclick=()=>result&&download('star-motion-track.json',JSON.stringify(result,null,2),'application/json');
   function stopSpace(){clearInterval(timer);timer=null;$("star-space-play").textContent='▶ Play motion';}
   $("track-3d").onclick=()=>{if(!result?.catalog?.xyz)return;const c=result.catalog;$("star-space-title").textContent=c.name;$("star-space-year").value=Math.round(c.epoch);$("star-space-play").disabled=!c.velocity;$("star-space-year").disabled=!c.velocity;$("star-space-note").textContent=c.velocity?'Gaia catalog trajectory: straight-line motion relative to the Solar System barycenter. This path uses catalog distance, proper motion and radial velocity, independently of the image drift. No orbital acceleration or full uncertainty propagation. The background is decorative.':'Gaia distance locates this source in space. Radial velocity is unavailable, so a complete 3D trajectory cannot be shown. The background is decorative.';yaw=-Math.atan2(c.xyz[1],c.xyz[0]);pitch=0;zoom=1;$("star-space").showModal();requestAnimationFrame(spaceDraw);};
@@ -260,6 +552,6 @@ const StarTracker = (() => {
     $("star-space-distance").textContent=`${Math.hypot(...current).toFixed(3)} pc from Solar System · ${year}`;
   }
   let drag=null;const canvas=$("star-space-canvas");canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY,yaw,pitch];canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){yaw=drag[2]+(e.clientX-drag[0])*.008;pitch=Math.max(-1.5,Math.min(1.5,drag[3]+(e.clientY-drag[1])*.008));spaceDraw();}};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));spaceDraw();},{passive:false});new ResizeObserver(spaceDraw).observe(canvas);
-  return {paint};
+  return {paint,kinds,pick,open:openCard};
 })();
 

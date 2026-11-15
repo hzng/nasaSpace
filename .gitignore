@@ -14,3 +14,8 @@ __pycache__/
 !.env.example
 *.pem
 *.key
+
+# Local design-tool state and session handoff notes
+.impeccable/
+outputs/handoff-ui-voice.md
+outputs/fableRedesign.md

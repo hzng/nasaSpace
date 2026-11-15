@@ -10,9 +10,28 @@ const LightLab = (() => {
     return element;
   }
   function note(message) { $("light-status").textContent=message; }
+  const subscript=s => String(s).replace(/\d/g,d=>"₀₁₂₃₄₅₆₇₈₉"[d]);
+  // Round axis steps (1, 2, 2.5 or 5 × 10ⁿ) so tick labels read as plain numbers
+  function ticks(min,max,count=5) {
+    const raw=(max-min)/count, mag=10**Math.floor(Math.log10(raw));
+    const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=raw*(1-1e-9));
+    const out=[];
+    for(let k=Math.ceil(min/step-1e-9);k<=Math.floor(max/step+1e-9);k++) out.push(Number((k*step).toPrecision(12)));
+    return out;
+  }
+  // With no clicked pixel, measure the named target when the session knows where it is: the bare field centre is often empty sky
+  function defaultSelection() {
+    const frames=state.session?.frames||[];
+    const i=frames[state.index]?.marker ? state.index : frames.findIndex(f=>f.marker);
+    if (i>=0) return {x:frames[i].marker[0],y:frames[i].marker[1],frame:i,label:`${state.title} guide position, ${dateText(frames[i].timestamp)}`};  // a mover's guide is only valid on its own date
+    const at=frames[state.index] ? targetAt(frames[state.index]) : null;
+    if (at) return {x:at[0],y:at[1],frame:state.index,label:`${state.title} position`};
+    return {x:.5,y:.5,frame:state.index,label:"Field centre · click the image to choose a point"};
+  }
+  function showDefault() { $("light-position").textContent=defaultSelection().label; }
   function invalidate(session) {
     generation++; result=null; point=null; $("light-result").hidden=true;
-    $("light-position").textContent="Center default";
+    showDefault();
     note(session && !session.frames?.length
       ? "Open sky first"
       : "Ready");
@@ -39,12 +58,12 @@ const LightLab = (() => {
     $("light-position").textContent=`${point.ra.toFixed(4)}°, ${point.dec.toFixed(4)}°`;
     if (result) note("Point changed");
   });
-  $("light-center").onclick=() => { point=null; generation++; $("light-position").textContent="Center default"; };
+  $("light-center").onclick=() => { point=null; generation++; showDefault(); };
 
   async function measure() {
     if (!state.session?.frames.length || state.loading) { note("Open sky first"); return; }
     const version=++generation;
-    const selection=point || {x:.5,y:.5,frame:state.index};
+    const selection=point || defaultSelection();
     const payload={session:state.session.id,frame:selection.frame ?? state.index,x:selection.x,y:selection.y,
       scope:$("light-scope").value,redshift:Number($("light-redshift").value)};
     $("measure-light").disabled=true;
@@ -58,11 +77,12 @@ const LightLab = (() => {
           if (version!==generation) { note("Cancelled"); break; }
           result=progress.result; shownRows=50;
           $("light-result").hidden=false;
-          $("light-position").textContent=`${result.ra.toFixed(4)}°, ${result.dec.toFixed(4)}°`;
+          const coords=`${result.ra.toFixed(4)}°, ${result.dec.toFixed(4)}°`;
+          $("light-position").textContent=selection.label ? `${selection.label.split(" · ")[0]} · ${coords}` : coords;
           const measured=result.points.filter(p=>Number.isFinite(p.flux));
           const clean=measured.filter(p=>p.chemical_eligible);
           const dates=measured.map(p=>p.timestamp.slice(0,10)).sort();
-          note(`${measured.length} pts · ${clean.length} clean`);
+          note(`${measured.length} point${measured.length===1?"":"s"} · ${clean.length} clean`+(payload.scope==="near" && measured.length<=3 ? " · Few points in ±7 days: try All dates" : ""));
           $("light-status").title=dates.length ? `${dates[0]} to ${dates.at(-1)} UTC` : "";
           render(); renderCandidates(); renderTable();
           $("light-sources").replaceChildren();
@@ -92,12 +112,13 @@ const LightLab = (() => {
   function render() {
     if(!result) return;
     const chart=$("light-chart"); chart.replaceChildren();
-    chart.append(svg("rect",{width:1000,height:390,fill:"#0c0d10"}));
+    chart.append(svg("rect",{width:1000,height:390,fill:"#000000"}));
     const rows=selectedPoints();
     if(!rows.length) {
       chart.append(svg("text",{x:500,y:170,"text-anchor":"middle",fill:"#eab354","font-size":20,"font-weight":700},"No data"));
-      chart.append(svg("text",{x:500,y:200,"text-anchor":"middle",fill:"#a39f97","font-size":13},"Adjust filters"));
+      chart.append(svg("text",{x:500,y:200,"text-anchor":"middle",fill:"#a1a1a6","font-size":13},"Adjust filters"));
       $("plot-note").textContent="Empty filter result";
+      chart.setAttribute("aria-label","Measured light chart: no points match the current filters");
       return;
     }
     const L=96,R=968,T=42,B=326;
@@ -113,33 +134,37 @@ const LightLab = (() => {
       if(start<xmax&&end>xmin) {
         chart.append(svg("rect",{x:x(Math.max(start,xmin)),y:T,width:x(Math.min(end,xmax))-x(Math.max(start,xmin)),height:B-T,fill:feature.color,opacity:.065}));
         const labelX=Math.min(R-12,Math.max(L+12,x(feature.center*z)));
-        chart.append(svg("text",{x:labelX,y:24,"text-anchor":"middle",fill:feature.color,"font-size":11},feature.formula));
+        chart.append(svg("text",{x:labelX,y:24,"text-anchor":"middle",fill:feature.color,"font-size":11},subscript(feature.formula)));
       }
     }
-    for(let i=0;i<=5;i++) {
-      const v=ymin+(ymax-ymin)*i/5;
-      chart.append(svg("line",{x1:L,y1:y(v),x2:R,y2:y(v),stroke:"#23252c","stroke-width":1,"stroke-dasharray":i===0?"":"3 4"}));
-      chart.append(svg("text",{x:L-12,y:y(v)+4,"text-anchor":"end",fill:"#a39f97","font-size":12},fmt(v)));
-      const xv=xmin+(xmax-xmin)*i/5;
-      const label=mode==="time"?new Date((xv-40587)*86400000).toISOString().slice(0,10):xv.toFixed(2);
-      chart.append(svg("text",{x:x(xv),y:B+25,"text-anchor":"middle",fill:"#a39f97","font-size":12},label));
+    chart.append(svg("line",{x1:L,y1:B,x2:R,y2:B,stroke:"#2c2c2e","stroke-width":1}));
+    for(const v of ticks(ymin,ymax)) {
+      chart.append(svg("line",{x1:L,y1:y(v),x2:R,y2:y(v),stroke:"#2c2c2e","stroke-width":1,"stroke-dasharray":v===0?"":"3 4"}));
+      chart.append(svg("text",{x:L-12,y:y(v)+4,"text-anchor":"end",fill:"#a1a1a6","font-size":12},fmt(v)));
     }
-    chart.append(svg("text",{x:530,y:376,"text-anchor":"middle",fill:"#f3efe6","font-size":13},mode==="spectrum"?"Wavelength (µm)":"Date (UTC)"));
-    chart.append(svg("text",{x:20,y:185,transform:"rotate(-90 20 185)","text-anchor":"middle",fill:"#f3efe6","font-size":13},"Flux (µJy)"));
+    for(const xv of mode==="time" ? [0,1,2,3,4,5].map(i=>xmin+(xmax-xmin)*i/5) : ticks(xmin,xmax)) {
+      const label=mode==="time"?new Date((xv-40587)*86400000).toISOString().slice(0,10):fmt(xv);
+      chart.append(svg("text",{x:x(xv),y:B+25,"text-anchor":"middle",fill:"#a1a1a6","font-size":12},label));
+    }
+    chart.append(svg("text",{x:530,y:376,"text-anchor":"middle",fill:"#f5f5f7","font-size":13},mode==="spectrum"?"Wavelength (µm)":"Date (UTC)"));
+    chart.append(svg("text",{x:20,y:185,transform:"rotate(-90 20 185)","text-anchor":"middle",fill:"#f5f5f7","font-size":13},"Flux (µJy)"));
     const dots=svg("g",{"clip-path":"url(#plot-clip)"});
     for(const p of rows) {
       const px=x(mode==="time"?p.mjd:p.wavelength),py=y(p.flux),color=hues[p.detector-1];
       const review=!p.chemical_eligible;
       dots.append(svg("line",{x1:px,y1:y(p.flux-p.flux_error),x2:px,y2:y(p.flux+p.flux_error),stroke:color,opacity:review?.4:.8}));
       if(mode==="spectrum") dots.append(svg("line",{x1:x(p.wavelength-p.bandwidth/2),y1:py,x2:x(p.wavelength+p.bandwidth/2),y2:py,stroke:color,opacity:.25}));
-      const dot=svg(review?"path":"circle",review?{d:`M${px-3.5},${py-3.5}l7,7m0,-7l-7,7`,stroke:color,"stroke-width":1.5,fill:"none"}:{cx:px,cy:py,r:4,fill:color,stroke:"#0c0d10","stroke-width":.8});
+      const dot=svg(review?"path":"circle",review?{d:`M${px-3.5},${py-3.5}l7,7m0,-7l-7,7`,stroke:color,"stroke-width":1.5,fill:"none"}:{cx:px,cy:py,r:4,fill:color,stroke:"#000000","stroke-width":.8});
       const description=`${p.timestamp} · D${p.detector} · ${p.release}\n${p.wavelength.toFixed(4)} µm · ${fmt(p.flux)} ± ${fmt(p.flux_error)} µJy\nFit residual ${fmt(p.fit_quality)} · ${p.reason||"Passed"}\n${p.id}`;
       dot.append(svg("title",{},description));dot.setAttribute("aria-label",description);dot.setAttribute("tabindex","0");dot.setAttribute("role","button");dot.style.cursor="pointer";
       dot.onclick=()=>openPoint(p);dot.onkeydown=e=>{if(e.key==="Enter")openPoint(p);};dots.append(dot);
     }
     chart.append(dots);
     const warning=rows.filter(p=>!p.chemical_eligible).length;
-    $("plot-note").textContent=`${rows.length} pts · ${warning} flagged`;
+    $("plot-note").textContent=`${rows.length} point${rows.length===1?"":"s"} · ${warning} flagged`;
+    const span=(values,f)=>{const lo=f(Math.min(...values)),hi=f(Math.max(...values));return lo===hi?lo:`${lo} to ${hi}`;};
+    const xText=mode==="spectrum"?`wavelength ${span(rows.map(p=>p.wavelength),v=>v.toFixed(2))} µm`:`dates ${span(rows.map(p=>p.mjd),v=>new Date((v-40587)*86400000).toISOString().slice(0,10))}`;
+    chart.setAttribute("aria-label",`${mode==="spectrum"?"Spectrum":"Flux over time"}: ${rows.length} point${rows.length===1?"":"s"} (${warning} flagged), ${xText}, flux ${span(rows.map(p=>p.flux),fmt)} µJy`);
   }
 
   async function openPoint(p) {
@@ -169,18 +194,28 @@ const LightLab = (() => {
 
   function renderCandidates() {
     const parent=$("chemical-candidates");parent.replaceChildren();
-    for(const candidate of result.candidates) {
+    const checked=result.candidates.filter(c=>c.evidence), unchecked=result.candidates.filter(c=>!c.evidence);
+    if(unchecked.length) {
+      // One muted line instead of a card per band that had too few points to test
+      const line=document.createElement("p");line.className="candidate-summary";
+      line.textContent=checked.length
+        ? `No dip check for ${unchecked.map(c=>subscript(c.formula)).join(", ")}: too few points near ${unchecked.length===1?"this band":"these bands"}.`
+        : `No dip checks possible: too few points near these bands.${$("light-scope").value==="all"?"":" Try All dates."}`;
+      line.title=unchecked.map(c=>`${c.formula}: ${c.status}\n${c.caution}`).join("\n\n");
+      parent.append(line);
+    }
+    for(const candidate of checked) {
       const card=document.createElement("article");card.className="candidate-card"+(candidate.candidate?" candidate-found":"");
       const title=document.createElement("h4"),statusText=document.createElement("strong"),sub=document.createElement("small");
       const shifted=candidate.center*(1+(result.redshift||0));
       title.textContent=result.redshift>0
-        ? `${candidate.formula} · ${shifted.toFixed(2)} µm`
-        : `${candidate.formula} · ${candidate.center.toFixed(2)} µm`;
+        ? `${subscript(candidate.formula)} · ${shifted.toFixed(2)} µm`
+        : `${subscript(candidate.formula)} · ${candidate.center.toFixed(2)} µm`;
       title.style.color=candidate.color;
       statusText.textContent=candidate.evidence ? (candidate.candidate ? `${candidate.evidence.significance.toFixed(1)}σ dip` : "No dip") : "Low coverage";
       sub.textContent=candidate.evidence ? `${candidate.evidence.points} pts · ${candidate.evidence.release}` : "Need continuum";
       card.title=`${candidate.status}\n${candidate.caution}`;
-      card.append(title,statusText,sub);parent.append(card);
+      card.append(title,statusText,sub);parent.insertBefore(card,parent.querySelector(".candidate-summary"));
     }
   }
 
@@ -196,7 +231,10 @@ const LightLab = (() => {
   $("more-measurements").onclick=()=>{shownRows+=100;renderTable();};
   for(const id of ["light-review","light-release","time-wave","time-tolerance"])$(id).onchange=render;
   $("light-redshift").onchange=()=>{if(result) note("Redshift updated");};
-  $("light-scope").onchange=()=>{if(result) note("Window updated");};
+  $("light-scope").onchange=()=>{
+    if($("light-scope").value==="all") note("All dates can mean thousands of files and several minutes per measurement.");
+    else if(result) note("Window updated");
+  };
   for(const name of ["spectrum","time"])$("plot-"+name).onclick=()=>{
     mode=name;for(const value of ["spectrum","time"])$("plot-"+value).setAttribute("aria-pressed",String(value===mode));
     $("time-wave-label").hidden=$("time-tolerance-label").hidden=mode!=="time";render();

@@ -1,0 +1,571 @@
+/* Workbench: image stage (flexible) + inspector (420 px) */
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  align-items: start;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  flex-wrap: wrap;
+}
+
+.target-title-block {
+  display: grid;
+  gap: 2px;
+}
+
+h1 {
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h3 {
+  font-size: 16px;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.coord-sub {
+  margin: 0;
+  font: 12px/1.4 var(--mono);
+  color: var(--muted);
+}
+
+.segmented {
+  display: inline-flex;
+  gap: var(--s1);
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-h-compact);
+  padding: 0 var(--s2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  border-radius: var(--r-control);
+}
+
+.segmented button[aria-pressed=true] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Stage: the image frame */
+.stage {
+  min-width: 0;
+}
+
+/* Target first: name in display type, then its type and position */
+.stage-title {
+  display: grid;
+  gap: var(--s1);
+  margin: var(--s2) 0 var(--s4);
+}
+
+.stage-title h1 {
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.stage-title .coord-sub {
+  font: 13px/20px var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.hero {
+  position: relative;
+}
+
+.viewers, #search-form, #light-panel {
+  scroll-margin-top: 70px;
+}
+
+.viewers {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: clamp(420px, calc(100vh - 230px), 760px);
+  background: var(--canvas-bg);
+  border-radius: var(--r-panel);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+  overflow: hidden;
+}
+
+.viewers.split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.image-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The canvas fills the pane without sizing it: a percentage height inside an auto-height grid
+   item fell back to the canvas bitmap height and pushed the image past the frame. */
+canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  /* A finger scrolls the page over the unzoomed image; app.js blocks the scroll once zoomed so a drag pans. */
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Bars floating over the image */
+.hero-float {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1);
+  border-radius: var(--r-panel);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: var(--shadow-float);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.viewer-bar {
+  top: var(--s3);
+  right: var(--s3);
+}
+
+.float-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--s1);
+  background: var(--line);
+  flex: none;
+}
+
+.toggle-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-h-compact);
+  padding: 0 var(--s2);
+  border-radius: var(--r-control);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition-property: color, background-color;
+  transition-duration: var(--t-fast);
+}
+
+/* Native box hidden but still focusable and operable */
+.toggle-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+.toggle-chip svg {
+  flex: none;
+}
+
+.toggle-chip:has(input:checked) {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.toggle-chip:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.zoom-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s1);
+  color: var(--muted);
+}
+
+.zoom-control input {
+  width: 96px;
+}
+
+.zoom-control output {
+  min-width: 32px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+#reset-view {
+  height: var(--control-h-compact);
+  min-height: 0;
+  padding: 0 var(--s2);
+  font-size: 12px;
+}
+
+.transport {
+  left: var(--s3);
+  right: var(--s3);
+  bottom: var(--s3);
+  margin-inline: auto;
+  width: min(560px, calc(100% - 288px));
+}
+
+.transport #play {
+  height: var(--control-h-compact);
+  min-height: 0;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.icon-btn {
+  width: var(--control-h-compact);
+  height: var(--control-h-compact);
+  min-height: 0;
+  padding: 0;
+  flex: none;
+}
+
+.transport input[type=range] {
+  flex: 1;
+  min-width: 60px;
+  margin: 0 var(--s1);
+}
+
+/* Touch: a 44 px hit area that still takes 24 px of layout, so the floating bars keep their height. */
+@media (pointer: coarse), (max-width: 768px) {
+  #zoom, #timeline {
+    height: 44px;
+    margin-block: -10px;
+  }
+}
+
+.transport .ui-select {
+  flex: none;
+}
+
+.frame-counter {
+  min-width: 88px;
+  padding: 0 var(--s1);
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Corner badges */
+.hud-badge {
+  position: absolute;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  padding: var(--s1) var(--s2);
+  color: var(--text);
+  font: 11px/16px var(--sans);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--r-control);
+}
+
+.hud-badge.hover-flag-badge {
+  top: 56px;
+  right: var(--s3);
+  padding: var(--s1) var(--s2);
+  border: 0;
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  color: var(--warning);
+  font: 11px/16px var(--sans);
+  backdrop-filter: none;
+}
+
+.hud-bl { left: var(--s3); bottom: var(--s3); }
+.hud-tl { left: var(--s3); top: var(--s3); color: var(--muted); }
+.hud-br { right: var(--s3); bottom: var(--s3); }
+
+.compass {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Loading and message states */
+.view-message {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  text-align: center;
+  padding: var(--s5);
+  background: var(--canvas-bg);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+  opacity: 1;
+  transition-property: opacity;
+  transition-duration: var(--t-menu);
+  transition-timing-function: var(--ease-out);
+}
+
+@starting-style {
+  .view-message:not([hidden]) {
+    opacity: 0;
+  }
+}
+
+.load-progress {
+  width: min(240px, 70%);
+  height: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.load-progress i {
+  display: block;
+  height: 100%;
+  background: var(--text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .load-progress i { transition: width 300ms var(--ease-out); }
+}
+
+.viewers[aria-busy=true] canvas,
+.empty-view canvas,
+.empty-view .hud-bl,
+.empty-view .hud-br {
+  visibility: hidden;
+}
+
+/* Compare mode: badges step inside the letterbox so the floats never cover them. */
+.viewers.split .hud-tl { top: 56px; }
+.viewers.split .hud-bl,
+.viewers.split .hud-br { bottom: 56px; }
+/* Both panes share one field of view, and the toolbar shows it; in compare the badge would sit beside the other pane's date. */
+.viewers.split #scale-label { display: none; }
+
+/* Play button icon swap */
+.play-icon-slot {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.play-icon-slot svg {
+  grid-area: 1 / 1;
+  transition-property: opacity;
+  transition-duration: var(--t-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+#play[aria-pressed=false] .icon-play,
+#play[aria-pressed=true] .icon-pause {
+  opacity: 1;
+}
+
+#play[aria-pressed=false] .icon-pause,
+#play[aria-pressed=true] .icon-play {
+  opacity: 0;
+}
+
+/* Under the image: legend, frames, notes */
+.legend-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s4);
+  padding: var(--s3) 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend-strip:not(:has(.legend-item:not([hidden]))) {
+  display: none;
+}
+
+.legend-marks {
+  display: contents;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-item svg {
+  flex: none;
+}
+
+.frames-block {
+  margin-top: var(--s5);
+}
+
+.timeline-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+  padding-bottom: var(--s2);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-heading label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+#baseline {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.filmstrip {
+  display: flex;
+  gap: var(--s2);
+  padding-bottom: var(--s2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.frame-button {
+  flex: none;
+  min-width: 112px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  /* Tight around the thumbnail, a full inset after the text. */
+  padding: var(--s1) var(--s3) var(--s1) var(--s1);
+  border-radius: var(--r-control);
+  text-align: left;
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  color: var(--text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .frame-button:hover { background: var(--surface-hover); }
+}
+
+.frame-button[aria-current=true] {
+  border-color: var(--line-hover);
+  background: var(--accent-soft);
+}
+
+.frame-button img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--s1);
+  object-fit: cover;
+  flex: none;
+}
+
+.frame-copy {
+  display: grid;
+  gap: 0;
+  padding-right: var(--s1);
+}
+
+.frame-button .frame-copy span {
+  display: block;
+  white-space: nowrap;
+  font: 12px/16px var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.frame-button .frame-copy span:first-child {
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Notes: a caption, then the disclosure rows as one list with hairlines between rows */
+.stage-notes {
+  margin-top: var(--s5);
+  color: var(--muted);
+}
+
+.comparison-note {
+  margin-block: 0;
+  padding: 0 var(--s2) var(--s2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.stage-notes > details:not([hidden]) {
+  border-top: 1px solid var(--line);
+}
+
+.stage-notes > details:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.stage-notes > details[open] {
+  padding-bottom: var(--s1);
+}
+
+/* Partial frames: an amber dot after the label (the count is in the label) */
+#excluded-summary::before {
+  content: "";
+  order: 1;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.excluded-observations a {
+  margin-left: var(--s2);
+}
+
+.excluded-observations #excluded-list {
+  max-height: 200px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}

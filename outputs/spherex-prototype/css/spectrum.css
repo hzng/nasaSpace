@@ -1,0 +1,269 @@
+/* Spectrum: header, controls, result toolbar, chart well, dip checks, disclosures, records. */
+.light-panel {
+  margin-top: var(--s7);
+}
+
+.light-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.light-panel .section-title {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.light-panel .coord-sub {
+  font: 12px/16px var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* One row of labelled fields; shared with the universe workspace controls. */
+.light-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.light-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.light-controls input[type=number] {
+  width: 80px;
+}
+
+.check-label {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.light-controls .btn-compact {
+  min-height: var(--control-h);
+  font-size: 13px;
+}
+
+.light-status {
+  margin: var(--s3) 0 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* Result reveal: opacity only */
+#light-result {
+  margin-top: var(--s4);
+  opacity: 1;
+  transition: opacity var(--t-dialog) var(--ease-out);
+}
+
+@starting-style {
+  #light-result:not([hidden]) {
+    opacity: 0;
+  }
+}
+
+.plot-toolbar {
+  margin-bottom: var(--s3);
+}
+
+.export-pills {
+  margin-left: auto;
+  display: flex;
+  gap: var(--s2);
+}
+
+/* The Spectrum / Time control: pressed is a soft fill */
+#light-panel .segmented {
+  background: none;
+  border: 1px solid var(--line-strong);
+  padding: 2px;
+  border-radius: var(--r-control);
+  gap: 2px;
+}
+
+#light-panel .segmented button {
+  min-height: calc(var(--control-h) - 6px);
+  padding: 0 var(--s3);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+#light-panel .segmented button[aria-pressed=true] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* light.js paints the chart's own background, so the well has no padding: one box, not two. */
+.plot-wrap {
+  overflow: hidden;
+  background: var(--canvas-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+}
+
+#light-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+#light-chart [role=button]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.band-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.plot-note {
+  margin: var(--s2) 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.candidate-heading {
+  margin-top: var(--s5);
+}
+
+.candidate-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.chemical-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.candidate-card {
+  display: grid;
+  gap: var(--s1);
+  align-content: start;
+  padding: var(--s3);
+  background: var(--surface);
+  border-radius: var(--r-control);
+}
+
+.candidate-card h4 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+.candidate-card strong {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.candidate-card.candidate-found strong {
+  color: var(--positive);
+}
+
+.candidate-card small {
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.candidate-summary {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* Disclosure rows inside the result */
+#light-result .coverage-help {
+  border-top: 1px solid var(--line);
+}
+
+#light-result .coverage-help:first-of-type {
+  margin-top: var(--s5);
+}
+
+#light-result .coverage-help:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+
+#light-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  font-size: 12px;
+  padding-bottom: var(--s3);
+}
+
+.measurement-table {
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.measurement-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-table th,
+.measurement-table td {
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  color: var(--text);
+}
+
+.measurement-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.measurement-table td:last-child {
+  color: var(--muted);
+}
+
+#more-measurements {
+  margin: var(--s2) 0 var(--s3);
+}

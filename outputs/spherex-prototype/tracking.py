@@ -11,13 +11,14 @@ from astropy.time import Time
 from astropy.io import fits
 from astropy.io.votable import parse_single_table
 from astropy.wcs import WCS
+import ephemeris
 from science import BAD_MASK, grid_for
 
 REJECT = BAD_MASK | sum(1 << b for b in (0,1,19,20,22,23,24,25))
 DEFAULT_LIMITATIONS = [
     'Apparent sky drift includes parallax and calibration errors; not a pure proper-motion measurement.',
     'A positional match is not a confirmed identification. Blends and wavelength-dependent centroids can bias the track.',
-    'Without Gaia, an archive ephemeris or a 2nd-frame anchor, fast jumps across unrelated visits can be missed.',
+    'Without Gaia, a JPL Horizons designation or a 2nd-frame anchor, fast jumps across unrelated visits can be missed.',
     '3D motion uses Gaia distance and velocity, not depth inferred from image centroids. Solar System barycenter is the reference origin.',
 ]
 
@@ -246,6 +247,84 @@ def identify(sky,mjd,cache,progress):
     r['distance_pc']=1000/r['parallax'] if reliable else None
     return r,'Gaia positional association; check crowded or blended sources.'
 
+
+SKYBOT = 'https://ssp.imcce.fr/webservices/skybot/api/conesearch.php'  # ~8 s; JPL sb_ident gave the same answer in ~70 s
+SIMBAD = 'https://simbad.harvard.edu/simbad/sim-tap/sync'  # the CDS host returned 404 on 2026-11-13
+
+
+def _cached_get(cache, url, params):
+    """Body of a GET, cached on disk: both catalogs answer the same query the same way."""
+    path = Path(cache) / 'identify' / (hashlib.sha256((url + json.dumps(params, sort_keys=True)).encode()).hexdigest() + '.txt')
+    if path.exists():
+        return path.read_text('utf-8')
+    response = requests.get(url, params=params, timeout=(10, 40))
+    response.raise_for_status()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(response.text, 'utf-8')  # SkyBoT answers 204 with no body when the cone is empty
+    return response.text
+
+
+def _solar_system(sky, mjd, cache):
+    # Geocentric (-loc=500): SPHEREx sits in low Earth orbit, about 1″ of parallax for a main-belt asteroid
+    text = _cached_get(cache, SKYBOT, {'-ep': f'{mjd + 2400000.5:.6f}', '-ra': f'{sky.ra.deg:.6f}', '-dec': f'{sky.dec.deg:.6f}',
+                                       '-rd': '0.01', '-mime': 'json', '-output': 'object', '-loc': '500', '-from': 'spherex-prototype'})
+    out = []
+    for row in json.loads(text) if text.strip() else []:
+        num, name = row.get('Num'), str(row.get('Name', '')).strip()
+        numbered = str(num).strip().isdigit()
+        out.append(dict(name=f'{num} {name}' if numbered and name != str(num) else name, kind='Solar System object',
+                        detail=row.get('Class', ''), source='IMCCE SkyBoT', separation_arcsec=float(row['d (arcsec)']),
+                        horizons=f'{num};' if numbered else name))  # a record number is unambiguous in Horizons
+    return out
+
+
+def _simbad(sky, mjd, cache):
+    ra, dec = sky.ra.deg, sky.dec.deg
+    # Positions are J2000. Barnard's Star, the fastest star, moves about 0.08° from it in 27 years, so fast movers come from a wider circle
+    query = f"""SELECT TOP 500 main_id, ra, dec, pmra, pmdec, otype FROM basic
+        WHERE CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.7f},{dec:.7f},0.1))=1
+        AND (CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.7f},{dec:.7f},0.01))=1 OR pmra*pmra+pmdec*pmdec>90000)"""
+    rows = json.loads(_cached_get(cache, SIMBAD, {'request': 'doQuery', 'lang': 'adql', 'format': 'json', 'query': query}))['data']
+    years = (mjd - 51544.5) / 365.25
+    out = []
+    for main_id, r, d, pmra, pmdec, otype in rows:
+        if r is None or d is None or str(otype).startswith('Pl'):
+            continue  # planets share their star's position
+        here = SkyCoord(r * u.deg, d * u.deg).spherical_offsets_by((pmra or 0) * years * u.mas, (pmdec or 0) * years * u.mas)
+        name = main_id
+        for prefix in ('NAME ', 'V* ', '* '):
+            name = name.removeprefix(prefix)
+        out.append(dict(name=' '.join(name.split()), kind='star' if '*' in str(otype) else 'catalogued object', detail=otype,
+                        source='SIMBAD', separation_arcsec=float(here.separation(sky).arcsec), horizons=None))
+    return out
+
+
+def name_source(path, guess, mjd, cache):
+    """Names the source under a click: centroid it, then ask SkyBoT and SIMBAD what sits there at that time."""
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        sky, _ = centroid(path, guess, search_px=3.0, allow_wing=True)
+        centroided = True
+    except ValueError:
+        sky, centroided = guess, False
+    tolerance = 6.15 if centroided else 12.3  # one SPHEREx pixel around a measured source, two around a bare click
+    with fits.open(path, memmap=True) as h:
+        header = h['IMAGE'].header
+        mid = float(header.get('MJD-AVG', mjd))
+        if str(header.get('TIMESYS', 'UTC')).strip().lower() != 'utc':
+            mid = float(Time(mid, format='mjd', scale=str(header['TIMESYS']).strip().lower()).utc.mjd)
+    found, unavailable = [], []
+    with ThreadPoolExecutor(2) as pool:
+        jobs = {'IMCCE SkyBoT': pool.submit(_solar_system, sky, mid, cache), 'SIMBAD': pool.submit(_simbad, sky, mid, cache)}
+        for label, job in jobs.items():
+            try:
+                found += job.result()
+            except Exception as error:  # one catalog down must not hide the other's answer
+                unavailable.append(f'{label} ({type(error).__name__})')
+    near = sorted((c for c in found if c['separation_arcsec'] <= tolerance), key=lambda c: c['separation_arcsec'])
+    return dict(match=near[0] if near else None, others=near[1:4], centroided=centroided, tolerance_arcsec=tolerance,
+                ra=float(sky.ra.deg), dec=float(sky.dec.deg), mjd=mid, searched=list(jobs), unavailable=unavailable)
+
 def _visit_groups(accepted, ref_sky, span_days):
     """Group rapid intra-visit exposures when the arc spans weeks/months."""
     pts = sorted(accepted, key=lambda p: p['mjd'])
@@ -432,39 +511,43 @@ def _kinematics(points, ref_sky, reference_mjd):
     return motion, segments, change
 
 
-def _build_ephemeris_predictor(frames, guide_skies):
-    """Build an interpolator over archived Solar System ephemeris points."""
-    ephem = [(f['mjd'], guide_skies[i][0], guide_skies[i][1]) for i, f in enumerate(frames) if guide_skies and guide_skies[i] is not None]
-    if len(ephem) < 2:
-        return None
-    ephem.sort(key=lambda row: row[0])
-    m0 = ephem[len(ephem) // 2][0]
-    sky0 = SkyCoord(ephem[len(ephem) // 2][1], ephem[len(ephem) // 2][2], unit='deg')
-    t = np.array([row[0] - m0 for row in ephem], float)
-    de, dn = sky0.spherical_offsets_to(SkyCoord([row[1] for row in ephem], [row[2] for row in ephem], unit='deg'))
-    deg = min(2, len(ephem) - 1)
-    ce = np.polyfit(t, de.arcsec, deg)
-    cn = np.polyfit(t, dn.arcsec, deg)
-    t_min, t_max = ephem[0][0] - 1.5, ephem[-1][0] + 1.5
-
-    def predict(mjd):
-        if mjd < t_min or mjd > t_max:
-            return None
-        dt = float(mjd - m0)
-        return sky0.spherical_offsets_by(float(np.polyval(ce, dt)) * u.arcsec, float(np.polyval(cn, dt)) * u.arcsec)
-
-    return predict, sky0
-
-
-def track(manifest, paths, payload, cache, progress, guide_skies=None):
+def track(manifest, paths, payload, cache, progress):
     grid, size = grid_for(manifest['options'])
     index = int(payload.get('frame', 0))
     x, y = float(payload.get('x', 0.5)), float(payload.get('y', 0.5))
-    if not (0 <= x < 1 and 0 <= y < 1):
+    obj = str(payload.get('object') or '').strip()
+    clicked = 'x' in payload and 'y' in payload
+    if (clicked or not obj) and not (0 <= x < 1 and 0 <= y < 1):
         raise ValueError('Click a star or moving object inside the image.')
     frames = manifest['frames']
     reference = frames[index]
     guess = grid.pixel_to_world(x * size - 0.5, (1 - y) * size - 0.5)
+
+    # 0. Ephemeris mode: JPL Horizons gives the predicted position at each exposure midpoint
+    eph, warnings = None, []
+    if obj:
+        mids, n_start = [], 0
+        for i, frame in enumerate(frames):
+            try:
+                with fits.open(paths[i], memmap=True) as h:
+                    mid, scale = float(h['IMAGE'].header['MJD-AVG']), str(h['IMAGE'].header.get('TIMESYS', 'UTC')).strip().lower()
+                # Horizons is asked in UT; a header in another time scale is converted, not assumed
+                mids.append(mid if scale == 'utc' else float(Time(mid, format='mjd', scale=scale).utc.mjd))
+            except KeyError:
+                mids.append(float(frame['mjd']))
+                n_start += 1
+        progress('Asking JPL Horizons for the predicted position')
+        eph = ephemeris.fetch(obj, [m + 2400000.5 for m in mids], cache)
+        rows = eph.pop('rows')
+        warnings = list(eph['warnings'])
+        if n_start:
+            warnings.append(f'{n_start} of {len(frames)} frames have no MJD-AVG; the exposure start was used instead of the midpoint.')
+        pred = [SkyCoord(float(r['ra']), float(r['dec']), unit='deg') for r in rows]
+        if clicked:
+            click_sep = float(pred[index].separation(guess).arcsec)
+            if click_sep > 45.0:
+                warnings.append(f'Your click is {click_sep:.0f}″ from the ephemeris position; the ephemeris position is being tracked.')
+        guess = pred[index]
 
     # 1. Measure or establish reference point (wing fit rescues bright saturated cores!)
     reference_warning = None
@@ -475,14 +558,18 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
         ref_q = None
         reference_warning = str(error)
 
-    # 2. Choose tracking guide mode: 2nd-frame manual anchor > archived ephemeris (Vesta) > Gaia DR3 > local kinematic
+    # 2. Choose tracking guide mode: JPL Horizons object > 2nd-frame manual anchor > Gaia DR3 > local kinematic
     anchor2 = payload.get('anchor2')
     predictor = None
     catalog, note = None, ''
     target_kind = 'star'
     search_px = 2.5
 
-    if isinstance(anchor2, dict) and anchor2.get('frame') is not None:
+    if eph is not None:
+        target_kind = 'asteroid'
+        search_px = 3.0
+        note = 'JPL Horizons predicted position; positions measured independently on each frame.'
+    elif isinstance(anchor2, dict) and anchor2.get('frame') is not None:
         f2 = int(anchor2['frame'])
         x2, y2 = float(anchor2.get('x', 0.5)), float(anchor2.get('y', 0.5))
         if f2 == index or not (0 <= f2 < len(frames)) or not (0 <= x2 < 1 and 0 <= y2 < 1):
@@ -501,19 +588,9 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
         predictor = lambda mjd: ref.spherical_offsets_by(ve_day * (mjd - ref_mjd0) * u.arcsec, vn_day * (mjd - ref_mjd0) * u.arcsec)
         target_kind = 'asteroid'
         search_px = 4.0
-        note = 'Two-frame velocity guide supplied by user.'
-    else:
-        ephem = _build_ephemeris_predictor(frames, guide_skies)
-        if ephem is not None:
-            ep_fn, _ = ephem
-            pred_here = ep_fn(reference['mjd'])
-            if (guide_skies[index] is not None and pred_here is not None) or (pred_here is not None and float(pred_here.separation(guess).arcsec) <= 45.0):
-                predictor = ep_fn
-                target_kind = 'asteroid'
-                search_px = 3.0
-                note = 'Archive ephemeris path for Solar System target; positions measured independently on each frame.'
+        note = 'No ephemeris: two-frame linear guide supplied by the user, for unidentified objects only.'
 
-    if predictor is None:
+    if predictor is None and eph is None:
         try:
             catalog, note = identify(ref, reference['mjd'], cache, progress)
         except Exception as e:
@@ -527,11 +604,14 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
 
     # 3. Measure centroids across frames (using predictor / Gaia or sequential kinematic search)
     points = [None] * len(frames)
-    if predictor is not None or catalog is not None:
+    if predictor is not None or catalog is not None or eph is not None:
         gaia_coord = space_coord(catalog) if catalog is not None else None
         for i, frame in enumerate(frames):
             progress(f'Measuring source position {i + 1} / {len(frames)}')
-            expected = gaia_coord.apply_space_motion(Time(frame['mjd'], format='mjd')) if gaia_coord is not None else predictor(frame['mjd'])
+            if eph is not None:
+                expected = pred[i]
+            else:
+                expected = gaia_coord.apply_space_motion(Time(frame['mjd'], format='mjd')) if gaia_coord is not None else predictor(frame['mjd'])
             if expected is None:
                 points[i] = dict(index=i, id=frame['id'], mjd=frame['mjd'], timestamp=frame['timestamp'],
                                  predicted=None, source=frame.get('source'), sha256=frame['sha256'],
@@ -542,6 +622,13 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
             item = dict(index=i, id=frame['id'], mjd=frame['mjd'], timestamp=frame['timestamp'],
                         predicted=[float((gx + 0.5) / size), float(1 - (gy + 0.5) / size)] if on_grid else None,
                         source=frame.get('source'), sha256=frame['sha256'])
+            if eph is not None:
+                pe, pn = ref.spherical_offsets_to(expected)
+                r = rows[i]
+                item.update(mjd_mid=mids[i], predicted_sky=[float(expected.ra.deg), float(expected.dec.deg)],
+                            predicted_east_arcsec=float(pe.arcsec), predicted_north_arcsec=float(pn.arcsec),
+                            rate_arcsec_per_hr=[float(r['dra_cosdec']), float(r['ddec'])],
+                            delta_au=float(r['delta_au']), light_time_min=float(r['light_time_min']))
             if not on_grid:
                 item.update(accepted=False, reason='Predicted position outside field of view')
                 points[i] = item
@@ -553,6 +640,12 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
                 item.update(accepted=True, ra=float(measured.ra.deg), dec=float(measured.dec.deg),
                             xy=[float((mx + 0.5) / size), float(1 - (my + 0.5) / size)],
                             east_arcsec=float(east.arcsec), north_arcsec=float(north.arcsec), **q)
+                if eph is not None:
+                    oe, on = expected.spherical_offsets_to(measured)
+                    tol = max(3 * q['error_arcsec'], 3.1)
+                    off = float(np.hypot(oe.arcsec, on.arcsec))
+                    item.update(offset_east_arcsec=float(oe.arcsec), offset_north_arcsec=float(on.arcsec),
+                                offset_arcsec=off, tolerance_arcsec=float(tol), within_tolerance=bool(off <= tol))
             except ValueError as e:
                 item.update(accepted=False, reason=str(e))
             points[i] = item
@@ -589,7 +682,25 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
                     item.update(accepted=False, reason=str(e))
                 points[i] = item
 
-    motion, segments, change = _kinematics(points, ref, reference['mjd'])
+    # Ephemeris mode: measured and predicted motion share the exposure midpoints and the accepted frames
+    motion, segments, change = (_kinematics([dict(p, mjd=p['mjd_mid']) for p in points], ref, mids[index]) if eph is not None
+                                else _kinematics(points, ref, reference['mjd']))
+    limitations = DEFAULT_LIMITATIONS
+    if eph is not None:
+        offs = [p['offset_arcsec'] for p in points if 'offset_arcsec' in p]
+        pp = [dict(accepted=p['accepted'], index=p['index'], timestamp=p['timestamp'], mjd=p['mjd_mid'], error_arcsec=0.3,  # _kinematics floor; predictions carry no centroid error
+                   east_arcsec=p['predicted_east_arcsec'], north_arcsec=p['predicted_north_arcsec'])
+              for p in points if 'mjd_mid' in p]
+        pm, _, pc = _kinematics(pp, ref, mids[index])
+        eph.update(time_scale='UTC, exposure midpoint (FITS MJD-AVG)', warnings=warnings,
+                   offset_median_arcsec=float(np.median(offs)) if offs else None,
+                   offset_max_arcsec=float(max(offs)) if offs else None,
+                   compared=len(offs), flagged=sum(not p['within_tolerance'] for p in points if 'within_tolerance' in p),
+                   tolerance_rule='max(3 × centroid error, 3.1″)', motion=pm, change=pc)
+        limitations = DEFAULT_LIMITATIONS + [
+            'The tolerance is a display rule, not a calibrated astrometric error model.',
+            "Horizons' SPHEREx trajectory is built from two-line elements (checked to agree with the FITS header spacecraft position to about 2 km).",
+        ]
     return dict(
         session=manifest['id'],
         reference_index=index,
@@ -601,6 +712,7 @@ def track(manifest, paths, payload, cache, progress, guide_skies=None):
         catalog_note=note,
         motion=motion,
         change=change,
-        model='Native-pixel 2D Gaussian core + PSF wing fallback; Gaia / ephemeris / 2-frame velocity guidance; quadratic kinematics',
-        limitations=DEFAULT_LIMITATIONS,
+        ephemeris=eph,
+        model='Native-pixel 2D Gaussian core + PSF wing fallback; JPL Horizons predicted position (or Gaia / 2-frame guide) compared with measured centroids; quadratic kinematics',
+        limitations=limitations,
     )

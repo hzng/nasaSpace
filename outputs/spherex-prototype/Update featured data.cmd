@@ -1,13 +1,13 @@
 @echo off
 cd /d "%~dp0"
-python -X utf8 sync_featured.py
+set PY=python
+if exist "..\..\work\venv\Scripts\python.exe" set PY=..\..\work\venv\Scripts\python.exe
+"%PY%" -X utf8 sync_featured.py
 if errorlevel 1 goto failed
-python -X utf8 prepare_featured.py
-if errorlevel 1 goto failed
-echo Featured observations and all field views are ready. Refresh the app.
+echo The observation list was refreshed. Images download when a view is opened. Refresh the app.
 pause
 exit /b 0
 :failed
-echo The update did not finish. Existing downloads are preserved. Run this again to resume.
+echo The update did not finish. The previous observation list is preserved. Run this again to retry.
 pause
 exit /b 1

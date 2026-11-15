@@ -1,0 +1,299 @@
+/* Motion tracker */
+.tracking-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.track-kind-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--s2);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--muted);
+  background: var(--surface-hover);
+}
+
+.tracking-bar p {
+  margin: var(--s1) 0 var(--s3);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.track-object {
+  display: grid;
+  gap: var(--s1);
+  margin: 0 0 var(--s3);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.track-object input {
+  width: 100%;
+}
+
+.tracking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.tracking-actions button {
+  height: var(--control-h);
+  font-size: 13px;
+}
+
+.tracking-actions button[aria-pressed=true] {
+  background: var(--accent-soft);
+  border-color: var(--line-hover);
+}
+
+.tracking-bar .track-help {
+  margin: var(--s3) 0 0;
+  color: var(--subtle);
+}
+
+#track-result {
+  margin-top: var(--s4);
+  display: grid;
+  gap: var(--s3);
+}
+
+.track-eph {
+  padding: var(--s3);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+.tracking-bar .track-eph p {
+  margin: 0 0 var(--s1);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tracking-bar .track-eph .track-source {
+  color: var(--text);
+}
+
+.tracking-bar .track-eph details {
+  margin-top: var(--s2);
+}
+
+/* Verdict: the demo's payoff, set in the same display type as the observation date */
+.track-verdict {
+  display: grid;
+  gap: var(--s3);
+  padding-bottom: var(--s2);
+}
+
+.tracking-bar .verdict-head {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+
+/* Sample size, one line under the claim; amber with a "Low confidence" prefix when few frames back it */
+.verdict-sample {
+  display: block;
+  margin-top: var(--s1);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.verdict-head.low .verdict-sample {
+  color: var(--warning);
+}
+
+.tracking-bar .track-object-note {
+  margin: calc(var(--s2) * -1) 0 var(--s3);
+  color: var(--muted);
+}
+
+.tracking-bar .verdict-head.pending {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.verdict-compare {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  column-gap: var(--s4);
+  row-gap: var(--s1);
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-compare dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.verdict-compare dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.verdict-compare dd + dd {
+  font-weight: 400;
+}
+
+/* JPL's numbers wear the prediction colour the plot uses for its dashed path */
+.verdict-compare .jpl {
+  color: var(--predict);
+}
+
+/* The comparison above already shows speed and heading */
+.track-kpis.compared .track-kpi:has(#kpi-speed, #kpi-heading) {
+  display: none;
+}
+
+.track-warnings {
+  margin: 0 0 var(--s1);
+  padding-left: var(--s4);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--warning);
+}
+
+.track-warnings:empty {
+  display: none;
+}
+
+.tracking-bar .track-flag {
+  margin: var(--s2) 0 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-control);
+  background: var(--positive-soft);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.tracking-bar .track-flag.partial {
+  background: var(--surface-hover);
+}
+
+.tracking-bar .track-flag.bad {
+  background: var(--danger-soft);
+}
+
+.tracking-bar p.track-error {
+  color: var(--danger);
+  white-space: pre-line;
+}
+
+.track-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.track-kpi {
+  display: grid;
+  gap: 2px;
+  padding: var(--s3);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+.track-kpi span {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.track-kpi strong {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-kpi small {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--predict);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-kpi small:empty {
+  display: none;
+}
+
+.track-charts {
+  display: grid;
+  gap: var(--s2);
+}
+
+#track-plot, #track-change-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--canvas-bg);
+  border-radius: var(--r-control);
+}
+
+#track-plot circle[role=button], #track-change-plot rect[role=button], #track-change-plot circle[role=button] {
+  cursor: pointer;
+}
+
+#track-summary {
+  margin: 0;
+}
+
+.track-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+#track-result details {
+  border-top: 1px solid var(--line);
+}
+
+/* Predicted path info card: floats over the image, clear of the top strip and the playback bar */
+.path-card {
+  position: absolute; top: 64px; right: 12px; z-index: 3;
+  width: min(300px, 45%); max-height: calc(100% - 148px); overflow: auto;
+  background: var(--panel); box-shadow: var(--shadow-float);
+  border-radius: var(--r-panel); padding: var(--s3); color: var(--text);
+  font-size: 12px; line-height: 16px;
+}
+/* Keep the card away from the selected dot: opposite corner. */
+.path-card.dot-right { right: auto; left: 12px; }
+.path-card.dot-top { top: auto; bottom: 72px; }
+.path-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.path-card-head h3 { display: flex; align-items: center; gap: var(--s2); margin: 0; font-size: 13px; font-weight: 600; line-height: 20px; color: var(--text); }
+.path-card-head h3::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--predict); flex: none; }
+.path-card-close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; background: none; border: 0; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.path-card-close:hover { color: var(--text); background: var(--accent-soft); }
+.path-card-body p { margin: var(--s1) 0 0; overflow-wrap: anywhere; }
+.path-card-body .k { color: var(--muted); }
+.path-card-time { color: var(--text); font-weight: 600; }
+.path-card-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+@media (max-width: 1120px) {
+  .path-card.dot-top { bottom: 12px; }
+}

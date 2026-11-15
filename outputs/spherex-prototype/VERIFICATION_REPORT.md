@@ -76,6 +76,8 @@
 | `python -X utf8 .../scratch/test_spectroscopy.py` | PASS | RW Aur contamination exclusion, WISE 0855 negative flux retention, `scope="near"` 7-day filtering (`30` pts), synthetic candidate gates |
 | `python -X utf8 .../scratch/smoke_http.py` | PASS | Live HTTP `200` on `/`, `app.css`, `app.js`, `light.js`, `universe.js`, `catalogs/*.json`, `/api/library`, Vesta session, pixel readout, updated out-of-cache `empty_reason`, `WISE 0855` spectrum job, `403` origin check, `400` bad coordinate rejection |
 
+2026-11-13: `app.css` was split into `css/*.css` and `ui-select.js` was added; the smoke check above predates that change and was not re-run for the new file names.
+
 ---
 
 ## 5. Scientific Limits & Open Testing Scope

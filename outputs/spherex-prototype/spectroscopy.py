@@ -214,7 +214,7 @@ def feature_candidates(points, redshift=0):
     return results
 
 
-def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None, end_mjd=None, redshift=0):
+def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None, end_mjd=None, redshift=0, resolve=None):
     sky=coordinate(ra,dec)
     if not math.isfinite(redshift) or not 0<=redshift<=5:
         raise ValueError('Reference redshift must be between 0 and 5.')
@@ -227,6 +227,7 @@ def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None,
     dedup={}
     for r in sorted(selected,key=lambda r:(r.get('processed_mjd',0),r.get('file_bytes',0)),reverse=True):
         dedup.setdefault((r['id'],r['detector']),r)
+    if resolve: resolve(dedup)  # fetch pixels for index-only observations
     calibration_index=json.loads((calibrations.CACHE/'index.json').read_text()) if (calibrations.CACHE/'index.json').exists() else {'products':calibrations.discover()}
     signature=[METHOD,float(sky.ra.deg),float(sky.dec.deg),redshift,start_mjd,end_mjd,
                sorted(r['sha256'] for r in dedup.values()),calibration_index['products']]
@@ -238,6 +239,7 @@ def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None,
     for index,record in enumerate(sorted(dedup.values(),key=lambda r:r['mjd'])):
         progress(f"Measuring light in observation {index+1} of {len(dedup)}")
         try:
+            if not record.get('path'): raise FileNotFoundError('Observation could not be fetched from the archive, or does not cover this position.')
             points.append(measurement(record,sky))
         except Exception as error:
             points.append(dict(id=record['id'],detector=record['detector'],timestamp=record['timestamp'],

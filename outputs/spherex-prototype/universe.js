@@ -67,7 +67,7 @@ const UniverseMap = (() => {
     page = 0; hoveredIndex = -1;
     renderResults();
     $("atlas-count").textContent = `${results.length.toLocaleString()} / ${catalog.records.length.toLocaleString()} ${kind}`;
-    $("atlas-legend").textContent = kind === "galaxies" ? "Blue → gold: increasing redshift · symbolic glow" : "Color: Gaia BP−RP · symbolic glow";
+    $("atlas-legend").textContent = kind === "galaxies" ? "Cyan → yellow → rose: increasing redshift · symbolic glow" : "Color: Gaia BP−RP · symbolic glow";
     $("atlas-context").textContent = mode === "slice"
       ? `ICRS Z slice centered at ${fmt(sliceCenter, 0)} ${catalog.unit}, thickness ${fmt(thickness, 0)} ${catalog.unit}. Positions retain their physical scale. Survey gaps are not proof of empty space.`
       : mode === "nearby" ? `Within ${fmt(limit, 0)} ${catalog.unit} of the chosen neighborhood center. Each point is a real catalog object.`

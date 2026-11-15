@@ -1,0 +1,339 @@
+/* Custom select (ui-select.js) and the shared menu look for every popover list. */
+
+/* The native select stays in the DOM as the source of truth, out of sight and out of reach. */
+.ui-select-native {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Trigger: looks like a field */
+.ui-select {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.ui-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  width: 100%;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--s2) 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.ui-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-select-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: rotate var(--t-menu) var(--ease-out);
+}
+
+.ui-select-trigger[aria-expanded=true] {
+  border-color: var(--line-hover);
+}
+
+.ui-select-trigger[aria-expanded=true] .ui-select-chevron {
+  rotate: 180deg;
+}
+
+.ui-select-trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-select-trigger:hover:not(:disabled) {
+    border-color: var(--line-hover);
+  }
+}
+
+/* Inside a stepper or the playback bar the container draws the frame. */
+.stepper .ui-select-trigger,
+.transport .ui-select-trigger {
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .stepper .ui-select-trigger:hover:not(:disabled),
+  .transport .ui-select-trigger:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--accent-soft);
+  }
+}
+
+.stepper .ui-select-trigger[aria-expanded=true],
+.transport .ui-select-trigger[aria-expanded=true] {
+  border-color: transparent;
+  background: var(--accent-soft);
+}
+
+/* Shared menu surface: select lists and the target list */
+.ui-menu,
+.target-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: var(--s1);
+  border: 0;
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: var(--shadow-float);
+  color: var(--text);
+  font-size: 13px;
+  opacity: 0;
+  translate: 0 4px;
+  transition-property: opacity, translate, display, overlay;
+  transition-duration: var(--t-menu);
+  transition-timing-function: var(--ease-out);
+  transition-behavior: allow-discrete;
+}
+
+.ui-menu:popover-open,
+.target-popover:popover-open {
+  opacity: 1;
+  translate: 0 0;
+}
+
+@starting-style {
+  .ui-menu:popover-open,
+  .target-popover:popover-open {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-menu,
+  .target-popover {
+    translate: none;
+    transition: none;
+  }
+}
+
+.ui-menu {
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ui-menu:popover-open {
+  display: flex;
+}
+
+.ui-menu-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+}
+
+.ui-menu-search {
+  flex: none;
+  width: 100%;
+  height: var(--control-h);
+  margin-bottom: var(--s1);
+  padding: 0 var(--s2);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.ui-menu-search:focus-visible {
+  outline: none;
+  border-color: var(--line-strong);
+}
+
+.target-popover {
+  width: 300px;
+  max-width: calc(100vw - 2 * var(--s2));
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Rows */
+.ui-menu-item,
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ui-menu-item.is-active,
+.field:focus-visible {
+  background: var(--accent-soft);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .field:hover {
+    background: var(--accent-soft);
+  }
+}
+
+.field:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Selected row: weight 500 and a check mark at the right */
+.ui-menu-item[aria-selected=true],
+.field[aria-current=true] {
+  font-weight: 500;
+  padding-right: 28px;
+}
+
+.ui-menu-item[aria-selected=true]::after,
+.field[aria-current=true]::after {
+  content: "";
+  position: absolute;
+  right: var(--s2);
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  background: var(--accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.ui-menu-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-menu-note {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-h);
+  padding: 0 var(--s2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Target list rows: thumbnail, name and observation count on one line */
+.popover-caption {
+  display: block;
+  padding: var(--s1) var(--s2);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.target-list {
+  display: grid;
+  gap: 0;
+}
+
+.field img {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  outline: 1px solid var(--image-outline);
+  outline-offset: -1px;
+  object-fit: cover;
+  flex: none;
+}
+
+.field-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field-copy > span {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.field-cat-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.field strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: inherit;
+  white-space: nowrap;
+}
+
+.field small {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+#import-shortcut {
+  display: flex;
+  width: 100%;
+  min-height: var(--control-h);
+  justify-content: flex-start;
+  gap: var(--s2);
+  margin-top: var(--s1);
+  padding: 0 var(--s2);
+  border-radius: var(--r-control);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  position: relative;
+}
+
+#import-shortcut::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--s1) / 2);
+  border-top: 1px solid var(--line);
+}
+
+.switcher-chevron {
+  transition: rotate var(--t-menu) var(--ease-out);
+}
+
+.target-switch:has(.target-popover:popover-open) .switcher .switcher-chevron {
+  rotate: 180deg;
+}
