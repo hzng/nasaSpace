@@ -621,14 +621,17 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    default_port = int(os.environ.get('PORT', 8765))
+    default_host = os.environ.get('HOST', '0.0.0.0')
     parser = argparse.ArgumentParser()
-    parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--host', type=str, default=default_host)
+    parser.add_argument('--port', type=int, default=default_port)
     args = parser.parse_args()
     initialize()
     # The page loads ~17 files at once; through the tunnel they arrive together, and the default backlog of 5 refuses some.
     ThreadingHTTPServer.request_queue_size = 64
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
-    print(f'SPHEREx prototype ready at http://127.0.0.1:{args.port}', flush=True)
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    print(f'SPHEREx prototype ready at http://{args.host}:{args.port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

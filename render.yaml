@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: spherex-workbench
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python outputs/spherex-prototype/server.py
+    plan: free
+    envVars:
+      - key: SPHEREX_PUBLIC
+        value: "1"
+      - key: SPHEREX_CACHE_GB
+        value: "2"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
