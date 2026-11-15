@@ -342,3 +342,18 @@ Tokens only, no new hard-coded colours. IDs and classes read by the JavaScript s
   - Clear no longer wraps alone at 375 px: `.tracking-actions` is a 2 × 2 grid at ≤620 px (`css/responsive.css`, now v=16). Checked in an Edge headless screenshot of a 375 px iframe.
   - Cache warmed on this machine through the 8767 API (same options as the UI): the default Vesta view (15′, D3, all dates, 58 frames) and the Aug 4–5 example (3 frames) both tracked in about 3 s, with every frame already cached.
   - Not committed, not deployed. The gstack browse daemon fails to start: it expects Playwright `chromium_headless_shell-1254`, and only 1234 is installed.
+- Commit and deploy 2026-11-14:
+  - `d599251` holds the redesign, critique, audit and cleanup work. branch1 had moved on (`cea2773`, `c612ca0`, `76ed756`, then `b2b836c`, committed by its own session), so both were merged into fable: `26f6571` and `874f3f3`.
+  - Conflicts: asset versions (now app.js v=17, tracking.js v=16) and the object label (branch1's text, fable's `aria-describedby`). In `tracking.js`, a shared `toJPL()` shows the "Tracks X at its JPL-predicted position" note only when the name really goes to Horizons; a clicked star's name doesn't.
+  - Checked on 8767 after each merge: page load with no console errors, Frame 18 / 58 with Vesta boxed, and a Vesta API track completed.
+  - branch1 was fast-forwarded to `874f3f3`. 8765 was restarted from branch1 with `SPHEREX_PUBLIC=1 SPHEREX_CACHE_GB=50`.
+    - The previous 8765 process had neither flag, so imports were open on the public link.
+    - The 2 GB default limit, with 3.3 GB already cached, kept evicting the demo frames.
+  - Through the tunnel: all 17 assets return 200 (tokens v=16), Frame 18 / 58 renders, and `/api/import` returns 403. The Vesta frames were re-downloaded at 00:08 and are cached.
+  - Nothing pushed.
+- Restart 2026-11-14 (afternoon), approved by the user:
+  - The 8765 server and the tunnel had died with the session that started them. branch1 was still at `874f3f3` with no edits, and nothing listened on 8765.
+  - 8765 restarted from branch1 with `SPHEREX_PUBLIC=1 SPHEREX_CACHE_GB=50`; one listener. Tunnel restarted; new URL `https://plants-trademark-universal-original.trycloudflare.com` (the old one is dead).
+  - Both were started with PowerShell `Start-Process -WindowStyle Hidden cmd /c …` instead of `nohup … &`, to try to outlive the session. Whether they do is not yet known.
+  - Through the new URL: all 17 assets return 200 (tokens v=16, app.js v=17, tracking.js v=16), `/api/import` returns 403, and an Edge headless screenshot shows Frame 18 / 58 with Vesta boxed and named. Cache is 3.3 GB; the Vesta frames were still there.
+  - Started without Supabase credentials (no `.env`, no `runpane secrets exec`), as in the handoff's command.
