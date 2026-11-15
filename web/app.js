@@ -1,4 +1,5 @@
-import {installSatelliteView} from './satellite-view.js?v=gaia-additions';
+import {installContextScopes} from './context-scopes.js';
+import {installSatelliteView} from './satellite-view.js?v=space-loader';
 const $=id=>document.getElementById(id);
 const icons={search:'<circle cx="7.5" cy="7.5" r="5"/><path d="m11.5 11.5 4 4"/>',close:'<path d="m4 4 10 10M14 4 4 14"/>',theme:'<circle cx="9" cy="9" r="5.5"/><path d="M9 3.5v11a5.5 5.5 0 0 0 0-11"/>',info:'<circle cx="9" cy="9" r="7"/><path d="M9 8v5M9 5v.2"/>',expand:'<path d="M2 6V2h4M12 2h4v4M16 12v4h-4M6 16H2v-4"/>',target:'<circle cx="9" cy="9" r="5"/><path d="M9 1v4M9 13v4M1 9h4M13 9h4"/>',arrow:'<path d="M3 9h12M10 4l5 5-5 5"/>',link:'<path d="m7 11 4-4M6 13l-1 1a3 3 0 0 1-4-4l4-4a3 3 0 0 1 4 0M12 5l1-1a3 3 0 0 1 4 4l-4 4a3 3 0 0 1-4 0"/>',play:'<path d="m5 3 9 6-9 6Z"/>',pause:'<path d="M6 3v12M12 3v12"/>',prev:'<path d="M4 4v10M14 4l-8 5 8 5Z"/>',next:'<path d="M14 4v10M4 4l8 5-8 5Z"/>',image:'<rect x="2" y="2" width="14" height="14" rx="2"/><circle cx="6" cy="6" r="1"/><path d="m2 13 5-5 4 4 2-2 3 3"/>'};
 function icon(k){return '<svg viewBox="0 0 18 18" aria-hidden="true">'+(icons[k]||icons.info)+'</svg>';}document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=icon(e.dataset.icon));
@@ -15,7 +16,8 @@ function select(id,focus=false){let token=++selectionToken;state.selected=id;sce
  if(state.mode==='solar'){facts([['From Sun',d.distance_sun_au.toFixed(3)+' AU'],['Mean radius',d.radius_km.toLocaleString('en-US')+' km'],[d.effective_temperature_k?'Effective temperature':'Orbital period',d.effective_temperature_k?d.effective_temperature_k.toLocaleString()+' K':(d.orbital_period_days||0).toLocaleString()+' days']]);$('object-source').textContent=d.asset_error||(d.id==='sun'?'Computed plasma / granulation illustration at 5,772 K. It is not a map of current sunspots.':d.texture_note);$('observe-selected').hidden=true;
  }else{facts([['From Sun',d.distance_pc.toFixed(3)+' pc / '+(d.distance_pc*3.26156).toFixed(2)+' ly'],['Distance interval',d.distance_lower_pc?d.distance_lower_pc.toFixed(3)+'–'+d.distance_upper_pc.toFixed(3)+' pc':'Reference origin'],['Temperature',d.teff_gspphot?Math.round(d.teff_gspphot).toLocaleString()+' K':'Not measured here'],['Magnitude',d.phot_g_mean_mag!=null?d.phot_g_mean_mag.toFixed(2)+' G':d.v_mag!=null?d.v_mag.toFixed(2)+' V':'Unavailable'],['Direction',d.ra!=null?d.ra.toFixed(3)+'°, '+d.dec.toFixed(3)+'°':'Solar origin']]);$('object-source').textContent=(d.catalog||'Solar reference')+' · '+(d.expanded_catalog?'HYG catalog distance; uncertainty unavailable. ':d.uncertain?'uncertain / model distance. ':'parallax distance. ')+(d.teff_gspphot?'Gaia GSP-Phot temperature is a model estimate. ':'')+'Approach opens a computed photosphere illustration. Individual spots, planets and terrain are unresolved; none are claimed as observations.';$('observe-selected').hidden=id==='origin';}
  $('trace-earth').hidden=id==='earth'||!!d.parent;$('trace-earth').disabled=true;if(scene)scene.readyJourneyContext=null;$('context-note').textContent='';
- if(id!=='earth')Promise.all([api('/api/journey?'+contextParams(d)),state.mode==='stars'&&!d.planets?api('/api/companions?'+new URLSearchParams({ra:d.ra,dec:d.dec,name:d.name})).then(r=>{d.planets=r.planets||[];}).catch(()=>{}):Promise.resolve()]).then(([c])=>{if(token!==selectionToken)return;scene.readyJourneyContext={selected:id,context:c};$('trace-earth').disabled=!(scene.mode==='solar'?scene.solarFlightReady:scene.cachedFlightSolar);$('context-note').textContent='Seen from Earth: '+c.constellation+'. Light travel time: '+(c.light_time_years<.01?(c.light_time_years*365.25*24*60).toFixed(1)+' minutes':c.light_time_years.toFixed(2)+' years')+'.';}).catch(()=>{if(token===selectionToken)$('context-note').textContent='Earth sky context is unavailable.';});
+ if(state.mode==='stars'&&id!=='origin'&&!d.planets)api('/api/companions?'+new URLSearchParams({ra:d.ra,dec:d.dec,name:d.name})).then(r=>{d.planets=r.planets||[];}).catch(()=>{});
+ if(id!=='earth')api('/api/journey?'+contextParams(d)).then(c=>{if(token!==selectionToken)return;scene.readyJourneyContext={selected:id,context:c};$('trace-earth').disabled=!(scene.mode==='solar'?scene.solarFlightReady:scene.cachedFlightSolar);$('context-note').textContent='Seen from Earth: '+c.constellation+'. Light travel time: '+(c.light_time_years<.01?(c.light_time_years*365.25*24*60).toFixed(1)+' minutes':c.light_time_years.toFixed(2)+' years')+'.';}).catch(error=>{if(token===selectionToken){$('context-note').textContent='Earth flight context: '+error.message;$('trace-earth').title='Reselect the object to retry.';}});
  $('object-strip').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===id));let b=[...$('object-strip').children].find(x=>x.dataset.id===id);b?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
 }
 function strip(items,solar){
@@ -59,6 +61,10 @@ let labView=true;
 let labTarget=null;
 function isCatalogStar(source){return !!source?.id&&source.xyz_pc?.length===3&&source.xyz_pc.every(Number.isFinite);}
 
+// The SPHEREx lab is an iframe: cover it with the space loader each time it navigates.
+const labFrame=$('observation-lab-frame');let labCover=null;
+new MutationObserver(()=>{if(!labFrame.getAttribute('src'))return;labCover=window.SpaceLoader?.cover($('observation-lab-host'),{eyebrow:'SPHEREX VIEW · ESTABLISHING DOWNLINK',title:'Opening the SPHEREx observatory',detail:'Loading the observation lab, archive index and detector previews.'});}).observe(labFrame,{attributes:true,attributeFilter:['src']});
+labFrame.addEventListener('load',()=>{labCover?.done();labCover=null;});
 function setWorkspace(active){
  document.body.dataset.workspace=active;
  const embedded=active==='spherex'&&labView;
@@ -238,7 +244,7 @@ async function ensureScene(){
  if(!sceneReady)sceneReady=(async()=>{const {ObservatoryScene}=await import('./scene.js?v=gaia-host');scene=new ObservatoryScene(select);scene.skyTarget=skyTarget;scene.theme(document.documentElement.dataset.theme==='light');$('activity-toggle').textContent='Activity '+(scene.activityEnabled?'on':'off');$('activity-toggle').setAttribute('aria-pressed',scene.activityEnabled);await showSolar();prefetchUniverse().catch(()=>{});})();
  try{await sceneReady;}catch(error){sceneReady=null;throw error;}
 }
-async function contextView(){setWorkspace('context');observations?.close();document.body.classList.remove('observing');$('observations').hidden=true;$('search-panel').hidden=true;try{await ensureScene();scene.resize();}catch(e){message('3D is unavailable: '+e.message+'. Return to observations to continue.');}}
+async function contextView(){setWorkspace('context');observations?.close();document.body.classList.remove('observing');$('observations').hidden=true;$('search-panel').hidden=true;try{if(!sceneReady)$('scene-loading').hidden=false;await ensureScene();scene.resize();}catch(e){$('scene-loading').hidden=true;message('3D is unavailable: '+e.message+'. Return to observations to continue.');}}
 // Wire navigation before importing optional views or starting catalog requests.
 $('universe-home').onclick=()=>contextView();
 $('observation-close').onclick=()=>contextView();
@@ -315,7 +321,8 @@ window.addEventListener('cosmic-select',async event=>{if(cosmicBusy)return;cosmi
 $('universe-home').onclick=()=>contextView();
 // Catalog volume is fetched only when optional 3D context is requested.
 
-window.parallax={state,get scene(){return scene;},get observations(){return observations;},showStars,showSolar,select};
+const setContextScope=installContextScopes({getScene:()=>scene,contextView,showSolar,syncSceneControls,toast});
+window.parallax={state,get scene(){return scene;},get observations(){return observations;},showStars,showSolar,select,setContextScope};
 
 $('observations-home').onclick=openSpherexTarget;
 window.addEventListener('spherex-open',()=>setWorkspace('spherex'));
@@ -402,7 +409,7 @@ function openLabField(point){
  const frame=$('observation-lab-frame');
  if(point&&(!labTarget||labTarget.ra!==point.ra||labTarget.dec!==point.dec)){
   labTarget=point;
-  const q=new URLSearchParams({ra:point.ra,dec:point.dec,fov:String([5,10,15,30,60].reduce((best,n)=>Math.abs(n-(+$('fov').value||15))<Math.abs(best-(+$('fov').value||15))?n:best,15)),source:'archive'});
+  const q=new URLSearchParams({ra:point.ra,dec:point.dec,fov:String([5,10,15,30,60].reduce((best,n)=>Math.abs(n-(+$('fov').value||15))<Math.abs(best-(+$('fov').value||15))?n:best,15)),source:'saved'});
   frame.src='/observation-lab/?'+q;
  }
  observations.open();

@@ -16,7 +16,8 @@ const StarTracker = (() => {
   // While busy, #track-status shows each stage silently; the hidden announcer speaks only start, finish and failure
   const announcer=document.createElement("p");announcer.className="sr-only";announcer.setAttribute("role","status");$("track-status").after(announcer);
   const announce=msg=>{announcer.textContent=msg;};
-  const setBusy=busy=>{$("track-star").textContent=busy?"Tracking…":"Track point";setText("track-clear",busy?"Cancel":"Clear");$("track-status")[busy?"removeAttribute":"setAttribute"]("role","status");};
+  let trackTask=null;
+  const setBusy=busy=>{if(busy&&!trackTask)trackTask=window.SpaceLoader?.begin("Tracking target across exposures");if(!busy){trackTask?.end();trackTask=null;}$("track-status").classList.toggle("sl-inline-busy",busy);$("track-star").textContent=busy?"Tracking…":"Track point";setText("track-clear",busy?"Cancel":"Clear");$("track-status")[busy?"removeAttribute":"setAttribute"]("role","status");};
   // Editing the object invalidates a running request, so its answer is never shown under the new name
   $("track-object").addEventListener('input',()=>{typedObject=true;noteObject();version++;if($("track-star").disabled){$("track-star").disabled=false;setBusy(false);$("track-status").textContent="Object changed. Press Track point to run again.";}});
   const compass=deg=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8];
@@ -114,7 +115,7 @@ const StarTracker = (() => {
       const job=await api('/observation-lab/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       while(token===version){
         const status=await api('/observation-lab/api/jobs/'+job.id);if(token!==version)return;
-        $("track-status").textContent=status.stage;
+        $("track-status").textContent=status.stage;trackTask?.set(status.stage?"Tracking · "+status.stage:null);
         if(status.status==='failed')throw new Error(status.stage);
         if(status.status==='complete'){
           result=status.result;render();draw();announce("Track ready. "+$("track-status").textContent);

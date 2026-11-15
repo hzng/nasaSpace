@@ -2,10 +2,10 @@
   {
     "target": "barnard",
     "discovered": 364,
-    "rendered": 10,
+    "rendered": 0,
     "compared": 0,
     "frames_with_residuals": 0,
-    "no_prior_reference": 10,
+    "no_prior_reference": 0,
     "errors": [],
     "scope": "All still-cached ready frames from the captured target search, not every discovered archive file.",
     "interpretation": "Field residual candidates; neither confirmed motion nor confirmed variability of the named target."
@@ -13,10 +13,10 @@
   {
     "target": "epsilon",
     "discovered": 449,
-    "rendered": 13,
+    "rendered": 0,
     "compared": 0,
     "frames_with_residuals": 0,
-    "no_prior_reference": 13,
+    "no_prior_reference": 0,
     "errors": [],
     "scope": "All still-cached ready frames from the captured target search, not every discovered archive file.",
     "interpretation": "Field residual candidates; neither confirmed motion nor confirmed variability of the named target."
@@ -24,10 +24,10 @@
   {
     "target": "wise",
     "discovered": 256,
-    "rendered": 34,
-    "compared": 2,
+    "rendered": 0,
+    "compared": 0,
     "frames_with_residuals": 0,
-    "no_prior_reference": 32,
+    "no_prior_reference": 0,
     "errors": [],
     "scope": "All still-cached ready frames from the captured target search, not every discovered archive file.",
     "interpretation": "Field residual candidates; neither confirmed motion nor confirmed variability of the named target."
@@ -35,10 +35,10 @@
   {
     "target": "rw",
     "discovered": 333,
-    "rendered": 11,
-    "compared": 1,
-    "frames_with_residuals": 1,
-    "no_prior_reference": 10,
+    "rendered": 0,
+    "compared": 0,
+    "frames_with_residuals": 0,
+    "no_prior_reference": 0,
     "errors": [],
     "scope": "All still-cached ready frames from the captured target search, not every discovered archive file.",
     "interpretation": "Field residual candidates; neither confirmed motion nor confirmed variability of the named target."
@@ -46,10 +46,10 @@
   {
     "target": "rdraconis",
     "discovered": 2483,
-    "rendered": 15,
+    "rendered": 0,
     "compared": 0,
     "frames_with_residuals": 0,
-    "no_prior_reference": 15,
+    "no_prior_reference": 0,
     "errors": [],
     "scope": "All still-cached ready frames from the captured target search, not every discovered archive file.",
     "interpretation": "Field residual candidates; neither confirmed motion nor confirmed variability of the named target."

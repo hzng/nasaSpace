@@ -124,10 +124,14 @@ export function installSatelliteView(view, {pinTarget, openContext, getTarget} =
     }
     if (catalogLoad) return;
     catalogFailed = false;
+    const skyCover = window.SpaceLoader?.cover(dialog.querySelector('.satellite-stage'), {
+      eyebrow: 'SATELLITE VIEW · ACQUIRING SKY', title: 'Loading the catalog sky',
+      detail: 'Streaming the 4K Deep Star Maps texture and catalog star directions.'});
+    const skyTask = window.SpaceLoader?.begin('Loading catalog sky texture');
     catalogLoad = loadCatalogSky(sky).then(render => { catalogDraw = render; }).catch(() => {
       catalogFailed = true;
       catalogLoad = null;
-    }).finally(() => { if (dialog.open) draw(); });
+    }).finally(() => { skyCover?.done(); skyTask?.end(); if (dialog.open) draw(); });
   }
 
   function chooseSource(source){
@@ -330,6 +334,7 @@ export function installSatelliteView(view, {pinTarget, openContext, getTarget} =
     const token = request;
     resolving = true;
     status.textContent = 'Finding the sky coordinates…';
+    status.classList.add('sl-inline-busy');
     try {
       const [x, y] = point;
       const coords = mode === 'look'
@@ -346,6 +351,7 @@ export function installSatelliteView(view, {pinTarget, openContext, getTarget} =
       if (token === request) status.textContent = error.message;
     } finally {
       if (token === request) resolving = false;
+      status.classList.remove('sl-inline-busy');
     }
   }
 
@@ -475,10 +481,13 @@ export function installSatelliteView(view, {pinTarget, openContext, getTarget} =
     openCatalog();
     draw();
     if (!selection) return;
+    const stage = dialog.querySelector('.satellite-stage');
+    const frameTask = data ? null : window.SpaceLoader?.begin('Downloading detector frame');
+    if (frameTask) { stage.classList.add('sl-scanning'); status.textContent = 'Downloading the SPHEREx detector frame…'; status.classList.add('sl-inline-busy'); }
     try {
       const result = data || await view.api(selection.url+'?'+new URLSearchParams({exposure_id:selection.id}));
       const image = pixels || new Image();
-      if (!pixels) { image.src=result.image; await image.decode(); }
+      if (!pixels) { frameTask?.set('Decoding detector pixels'); image.src=result.image; await image.decode(); }
       if (token!==request || !dialog.open) return;
       data=result; pixels=image; frameTarget=result.target??result.crop_center;
       if (target && Math.abs(target.ra-frameTarget.ra)<1e-7 && Math.abs(target.dec-frameTarget.dec)<1e-7) target=frameTarget;
@@ -490,9 +499,12 @@ export function installSatelliteView(view, {pinTarget, openContext, getTarget} =
       }
       byId('satellite-loaded').disabled=false;
       byId('satellite-full').disabled=!result.detector_offset;
+      if (frameTask) status.textContent = 'Drag to explore, select a star, or right-click to open its infrared field.';
       draw();
     } catch(error) {
       if(token===request) status.textContent='Detector image unavailable: '+error.message+' You can still explore the sky.';
+    } finally {
+      frameTask?.end(); stage.classList.remove('sl-scanning'); status.classList.remove('sl-inline-busy');
     }
   }
   byId('satellite-view-tab').onclick = open;

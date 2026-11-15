@@ -33,6 +33,37 @@ def _http():
     return session
 
 
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _irsa(method, url, attempts=3, **kwargs):
+    """IRSA's gateway answers brief 5xx errors under load; retry those with a short backoff."""
+    for attempt in range(attempts):
+        try:
+            session = _http()
+            caller = getattr(session, method.lower(), None)
+            response = caller(url, **kwargs) if callable(caller) else session.request(method, url, **kwargs)
+            if response.status_code not in RETRY_STATUS or attempt == attempts - 1:
+                response.raise_for_status()
+                return response
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == attempts - 1:
+                raise
+        time.sleep(1.5 * (attempt + 1))
+
+
+def irsa_outage(error):
+    """A short reason for an unreachable IRSA search, or None for other failures."""
+    while error is not None:
+        response = getattr(error, 'response', None)
+        if response is not None and response.status_code in RETRY_STATUS:
+            return f'IRSA returned HTTP {response.status_code}'
+        if isinstance(error, (requests.ConnectionError, requests.Timeout)):
+            return 'IRSA did not respond'
+        error = error.__cause__ or error.__context__
+    return None
+
+
 def write_json(path, data):
     temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     temporary.write_text(json.dumps(data, indent=2, allow_nan=False), encoding='utf-8')
@@ -64,10 +95,9 @@ def query(config, ra, dec, radius=.001, start=None, end=None):
         adql = ("SELECT a.uri AS access_uri, p.time_bounds_lower AS observed_mjd, "
                 "p.energy_bandpassname AS detector_name FROM spherex.artifact a "
                 f"JOIN spherex.plane p ON a.planeid = p.planeid WHERE {where}")
-        response = _http().post(config.get('tap_endpoint', 'https://irsa.ipac.caltech.edu/TAP/sync'),
+        response = _irsa('POST', config.get('tap_endpoint', 'https://irsa.ipac.caltech.edu/TAP/sync'),
             data={'REQUEST':'doQuery', 'LANG':'ADQL', 'QUERY':adql, 'FORMAT':'votable', 'MAXREC':20000},
-            timeout=(15, 180))
-        response.raise_for_status()
+            timeout=(6, 20))
         if b'OVERFLOW' in response.content or b'value="ERROR"' in response.content:
             raise ValueError('TAP returned a truncated result or an error.')
         table = parse_single_table(BytesIO(response.content)).to_table(use_names_over_ids=True)
@@ -93,20 +123,59 @@ def query(config, ra, dec, radius=.001, start=None, end=None):
                 unique[key] = rank, item
         return sorted([value[1] for value in unique.values()], key=lambda r:(r['mjd'],r['detector']))
     except Exception as error:
-        records = query_sia(config, ra, dec, radius, start, end)
+        try:
+            records = query_sia(config, ra, dec, radius, start, end)
+        except (requests.RequestException, ValueError) as sia_error:
+            records = saved_discovery(ra, dec, start, end)
+            if not records:
+                reason = irsa_outage(sia_error) or irsa_outage(error)
+                raise RuntimeError(('IRSA\'s SPHEREx search service is down right now' + (f' ({reason})' if reason else '') + '. '
+                                    if reason else 'IRSA search is temporarily unavailable. ') +
+                                   'no saved observations cover this position yet. '
+                                   'Retry Search IRSA in a few minutes, or open a saved field.') from sia_error
+            for record in records:
+                record['discovery_api'] = 'Saved IRSA observation index'
+                record['discovery_warning'] = ('Live IRSA discovery is unavailable. Showing a saved subset; '
+                                               'newer observations may be missing. Original pixels are retrieved from the official cloud mirror when needed.')
+            return records
         for record in records:
             record['discovery_api'] = 'IRSA SIA fallback (can lag TAP by about one day)'
             record['discovery_warning'] = str(error)
         return records
 
 
-def query_sia(config, ra, dec, radius=.001, start=None, end=None, timeout=(15,180)):
+def saved_discovery(ra, dec, start=None, end=None):
+    """Reuse recorded archive identities, never manufacture a sky-coverage result."""
+    from backend.archive import discovery_query, key_for, saved_manifest
+    from backend.saved_archive import local_rows
+    name = 'query-' + key_for(discovery_query(ra, dec)) + '.json'
+    rows = list(local_rows(ra, dec))
+    for manifest in (name, 'sia-' + name):
+        saved, _ = saved_manifest(manifest)
+        rows.extend(saved or [])
+    unique = {}
+    for row in rows:
+        uri = row.get('url', '')
+        identity = re.search(r'level2_(.+)D([1-6])_spx_', uri)
+        release = re.search(r'/spherex/((?:qr|dr)\d+)/', uri)
+        mjd = float(row['mjd'])
+        if not identity or not release or (start is not None and mjd < start) or (end is not None and mjd >= end):
+            continue
+        item = dict(id=identity[1], detector=int(identity[2]), source=uri,
+                    release=release[1].upper(), collection='spherex_'+release[1], mjd=mjd,
+                    field_key='archive', field_name='Saved archive search', context=[])
+        key = item['id'], item['detector']
+        if key not in unique or reduction_priority(item) > reduction_priority(unique[key]):
+            unique[key] = item
+    return sorted(unique.values(), key=lambda r: (r['mjd'], r['detector']))
+
+
+def query_sia(config, ra, dec, radius=.001, start=None, end=None, timeout=(6,20)):
     params = [('COLLECTION', name) for name in config['collections']]
     params += [('POS', f'CIRCLE {ra} {dec} {radius}'), ('MAXREC', '20000')]
     if start is not None or end is not None:
         params.append(('TIME', f"{start if start is not None else '-Inf'} {end if end is not None else 'Inf'}"))
-    response = _http().get(config['sia_endpoint'], params=params, timeout=timeout)
-    response.raise_for_status()
+    response = _irsa('GET', config['sia_endpoint'], params=params, timeout=timeout)
     if b'OVERFLOW' in response.content:
         raise ValueError('IRSA truncated the search. Narrow the dates; no truncated result is accepted.')
     if b'value="ERROR"' in response.content:
@@ -153,35 +222,26 @@ def download(record, ra, dec, fov, cache):
         if not path.exists():
             if shutil.disk_usage(cache).free < 5_000_000_000:
                 raise OSError('Less than 5 GB disk space remains; download paused. Existing data is safe.')
-            actual_url = url
-            for attempt in range(4):
-                temporary = cache / f'{key}.{uuid.uuid4().hex}.part'
-                try:
-                    # If IRSA's cutout service fails, retain the original full detector
-                    # file. It has the same calibrated pixels and may avoid a service bug.
-                    actual_url = source if attempt == 3 else url
-                    with _http().get(actual_url, stream=True, timeout=(15, 180), allow_redirects=False) as response:
-                        response.raise_for_status()
-                        with temporary.open('wb') as handle:
-                            for chunk in response.iter_content(1024*1024):
-                                handle.write(chunk)
-                    metadata = fits_metadata(temporary)
-                    if metadata['id'] != record['id'] or metadata['detector'] != record['detector']:
-                        raise ValueError('The downloaded FITS identity does not match the archive record.')
-                    temporary.replace(path)
-                    break
-                except Exception:
-                    temporary.unlink(missing_ok=True)
-                    if attempt == 3:
-                        raise
-                    time.sleep(2 ** (attempt + 1))
+            # Share Parallax's bounded transfer and official S3 range-read
+            # fallback. Retrying a failed IPAC proxy cannot repair an outage.
+            from backend.archive import download_cutout
+            transport = download_cutout(source, url, path, float(ra), float(dec), float(fov)*1.5)
+            metadata = fits_metadata(path)
+            if metadata['id'] != record['id'] or metadata['detector'] != record['detector']:
+                path.unlink(missing_ok=True)
+                raise ValueError('The downloaded FITS identity does not match the archive record.')
         meta = fits_metadata(path)
         if meta['id'] != record['id'] or meta['detector'] != record['detector']:
             raise ValueError('Cached FITS identity does not match the archive record.')
         meta.update(file_bytes=path.stat().st_size, requested_source_width_deg=source_width,
                     download_center=[float(ra), float(dec)], download_url=url,
                     provenance='Official IRSA FITS; observation and detector verified; padded source for sky alignment')
-        if 'actual_url' in locals() and actual_url == source:
-            meta.update(download_url=source, provenance='Official IRSA full detector FITS; cutout service unavailable; identity verified')
+        if 'transport' in locals():
+            meta['transport'] = transport
+            if transport != 'IRSA cutout service':
+                from backend.archive import CONFIG as archive_config
+                from backend.cloud import mirror_key
+                meta['download_url'] = archive_config['cloud_origin'] + mirror_key(source)
+                meta['provenance'] = transport + '; native FITS pixels; observation and detector verified'
         write_json(sidecar, meta)
         return dict(record, **meta, path=str(path), fits_url=f'/cache/{path.name}')

@@ -89,6 +89,14 @@ body.observing #systems-toggle{display:none}
 body.observing #observations{scroll-margin-top:78px}
 
 .travel-dust{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;z-index:2}
+#context-scopes{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);text-align:left}
+#context-scopes .scope-buttons{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+#context-scopes button{flex:1;white-space:normal;line-height:1.4;padding:8px 10px;min-height:38px}
+#context-scopes button small{display:block;font-size:9px;opacity:.7}
+#context-scopes button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+#context-scopes .micro{margin:8px 0 0;max-width:310px;font-size:10px}
+body:not([data-workspace=context]) #context-scopes{display:none}
+@media(max-width:650px){#context-scopes{padding:7px}#context-scopes button{font-size:10px;padding:5px}#context-scopes .eyebrow{display:none}#context-scopes .scope-buttons{margin-top:0}}
 #stellar-note{max-width:min(900px,92vw);line-height:1.7}
 [hidden]{display:none!important}
 
@@ -192,3 +200,11 @@ body[data-workspace="spherex"][data-lab="embedded"] #workspace{display:none}
 #observation-lab-frame{display:block;width:100%;height:calc(100dvh - 68px);border:0}
 #original-observation-tools{position:absolute;top:7px;right:12px;font-size:.72rem;padding:4px 7px;z-index:1}
 #context-star-results{display:grid;gap:6px;max-height:180px;overflow:auto}
+
+/* Keep scope, camera actions and catalog filters on separate rows. */
+body[data-workspace=context] .view-tools{top:24px;width:min(720px,calc(100% - 360px));display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:5px}
+body[data-workspace=context] #context-scopes{flex:0 0 100%;box-sizing:border-box}
+body[data-workspace=context] #context-scopes .scope-buttons button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+body[data-workspace=context] #star-filters{position:static;flex:0 0 100%;box-sizing:border-box;max-width:none;flex-wrap:wrap;justify-content:flex-end;padding:8px 0 0;margin-top:3px;border-top:1px solid var(--line)}
+@media(min-width:651px) and (max-width:1000px){body[data-workspace=context] .view-tools{width:calc(100% - 260px)}}
+@media(max-width:650px){body[data-workspace=context] .view-tools{top:14px;left:12px;right:12px;width:auto;gap:3px}body[data-workspace=context] #star-filters{gap:5px 12px;justify-content:flex-start}body[data-workspace=context] #visible-count{flex-basis:100%;font-size:9px}body[data-workspace=context] .scene-heading{display:none}}

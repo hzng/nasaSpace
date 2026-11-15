@@ -41,33 +41,59 @@ def original_geometry(path):
 
 def local_rows(ra, dec):
     from .archive import key_for
-    if not STATE.is_file():
-        return []
-    try:
-        with sqlite3.connect(f"{STATE.as_uri()}?mode=ro", uri=True, timeout=3) as db:
-            keys = db.execute("SELECT key FROM images WHERE sha256 IS NOT NULL").fetchall()
-    except sqlite3.Error:
-        return []
     matches = []
-    for (key,) in keys:
-        path = saved_original(key)
-        if path is None:
-            continue
+    if STATE.is_file():
         try:
-            wcs, width, height, mjd, date = original_geometry(path)
-            x, y = wcs.world_to_pixel_values(ra, dec)
-        except (ValueError, KeyError, OSError, TypeError):
-            continue
-        if not (math.isfinite(mjd) and -.5 <= x < width-.5 and -.5 <= y < height-.5):
-            continue
-        detector = re.search(r"D([1-6])_spx", key)
-        if not detector:
-            continue
-        detector = int(detector[1])
-        url = "https://irsa.ipac.caltech.edu/ibe/data/spherex/" + key
-        observation = key.rsplit("/", 1)[-1].split("_spx", 1)[0].removeprefix("level2_")
-        matches.append(dict(id=key_for(url), url=url, mjd=mjd, date=date, detector=detector,
-            band=f"SPHEREx-D{detector}", release=key.split("/", 1)[0], observation=observation))
+            with sqlite3.connect(f"{STATE.as_uri()}?mode=ro", uri=True, timeout=3) as db:
+                keys = db.execute("SELECT key FROM images WHERE sha256 IS NOT NULL").fetchall()
+            for (key,) in keys:
+                path = saved_original(key)
+                if path is None:
+                    continue
+                try:
+                    wcs, width, height, mjd, date = original_geometry(path)
+                    x, y = wcs.world_to_pixel_values(ra, dec)
+                except (ValueError, KeyError, OSError, TypeError):
+                    continue
+                if not (math.isfinite(mjd) and -.5 <= x < width-.5 and -.5 <= y < height-.5):
+                    continue
+                detector = re.search(r"D([1-6])_spx", key)
+                if not detector:
+                    continue
+                detector = int(detector[1])
+                url = "https://irsa.ipac.caltech.edu/ibe/data/spherex/" + key
+                observation = key.rsplit("/", 1)[-1].split("_spx", 1)[0].removeprefix("level2_")
+                matches.append(dict(id=key_for(url), url=url, mjd=mjd, date=date, detector=detector,
+                    band=f"SPHEREx-D{detector}", release=key.split("/", 1)[0], observation=observation))
+        except sqlite3.Error:
+            pass
+
+    lib_path = ROOT / 'cache/observation-lab/featured-library.json'
+    if lib_path.is_file():
+        try:
+            import json
+            lib = json.loads(lib_path.read_text(encoding='utf-8'))
+            for r in lib.get('records', []):
+                center = r.get('center')
+                radius = r.get('radius_deg', 1.0)
+                if not center or len(center) != 2:
+                    continue
+                dist = math.hypot((ra - center[0]) * math.cos(math.radians((dec + center[1]) / 2)), dec - center[1])
+                if dist <= radius:
+                    url = r.get('source')
+                    if not url:
+                        continue
+                    mjd = r.get('mjd')
+                    date = r.get('timestamp')
+                    det = r.get('detector')
+                    rel = r.get('release', '').lower()
+                    obs = re.search(r"level2_(.*?)_spx", url)
+                    observation = obs.group(1) if obs else url
+                    matches.append(dict(id=key_for(url), url=url, mjd=mjd, date=date, detector=det,
+                        band=f"SPHEREx-D{det}", release=rel, observation=observation))
+        except Exception:
+            pass
+
     return matches
 
 

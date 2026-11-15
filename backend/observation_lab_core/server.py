@@ -56,6 +56,24 @@ VIEW_INDEX.mkdir(exist_ok=True)
 CACHE_LIMIT = float(os.environ.get('SPHEREX_CACHE_GB', 2)) * 1e9
 MAX_FRAMES = 120  # per view; the busiest saved target other than R Draconis has 97
 
+TARGET_SESSIONS = {
+    'vesta': 'e73b15d70f48408b9b7932aee4bb2c59',
+    'barnard': 'd1fa8853f3c340c8822a3a48e80ba444',
+    'epsilon-indi': '4d9dd1c752e84d27946cad613ad1c1f4',
+    'wise-0855': '7a66c2411dd440758a1336a839d8bde7',
+    'rw-aur': 'daccb2b332db4c15867d0027796672a3',
+    'r-dra': '4ac83d693bac4c97968f8326d99f485c',
+}
+
+FEATURED_TARGET_COORDS = {
+    'vesta': (222.9452745, -11.9498975, 'e73b15d70f48408b9b7932aee4bb2c59', 3),
+    'barnard': (269.44625, 4.7675, 'd1fa8853f3c340c8822a3a48e80ba444', 3),
+    'epsilon-indi': (331.0666667, -56.7905556, '4d9dd1c752e84d27946cad613ad1c1f4', 3),
+    'wise-0855': (133.7951292, -7.2451472, '7a66c2411dd440758a1336a839d8bde7', 6),
+    'rw-aur': (76.956525, 30.4014389, 'daccb2b332db4c15867d0027796672a3', 3),
+    'r-dra': (248.1676125, 66.7549806, '4ac83d693bac4c97968f8326d99f485c', 3),
+}
+
 
 def atomic_json(path, data):
     write_json(path, data)
@@ -104,7 +122,12 @@ def refresh_featured():
         if stamp != FEATURED_STAMP:
             catalog = json.loads(FEATURED.read_text())
             RECORDS[:] = [r for r in RECORDS if not r.get('featured_cache')]
-            RECORDS.extend(dict(r, featured_cache=True) for r in catalog['records'])
+            for r in catalog['records']:
+                if r.get('path') and not Path(r['path']).exists():
+                    local_candidate = CACHE / Path(r['path']).name
+                    if local_candidate.exists():
+                        r['path'] = str(local_candidate)
+                RECORDS.append(dict(r, featured_cache=True))
             FEATURED_STAMP = stamp
 
 
@@ -124,7 +147,7 @@ def fetch_archive(options, progress):
     rows = [r for r in rows if r['detector'] == options['detector']]
     if not rows:
         return [], 0, []
-    records, failures = [], []
+    records, failures = [], list(dict.fromkeys(r['discovery_warning'] for r in rows if r.get('discovery_warning')))
     progress(f"Downloading 0 of {len(rows)} observations from IRSA…")
     with ThreadPoolExecutor(max_workers=min(6, len(rows))) as download_pool:
         futures = {
@@ -145,7 +168,27 @@ def fetch_archive(options, progress):
 
 
 def available(record):
-    return bool(record.get('path')) and Path(record['path']).exists()
+    if bool(record.get('path')) and Path(record['path']).exists():
+        return True
+    if record.get('path') and (CACHE / Path(record['path']).name).exists():
+        record['path'] = str(CACHE / Path(record['path']).name)
+        return True
+    if not hasattr(available, '_sidecars'):
+        sidecars = {}
+        for sf in CACHE.glob('*.record.json'):
+            try:
+                data = json.loads(sf.read_text())
+                fits_file = CACHE / (sf.stem.split('.')[0] + '.fits')
+                if fits_file.exists():
+                    sidecars[(data['id'], data['detector'])] = str(fits_file)
+            except Exception:
+                pass
+        available._sidecars = sidecars
+    match = available._sidecars.get((record.get('id'), record.get('detector')))
+    if match and Path(match).exists():
+        record['path'] = match
+        return True
+    return False
 
 
 def ensure_local(record):
@@ -171,8 +214,16 @@ def fetch_cutouts(records, ra, dec, fov, progress, failures, start=None, end=Non
         return center[0] is not None and abs(center[0]-ra) < 1e-9 and abs(center[1]-dec) < 1e-9
     if not all(centered(r) for r in records):
         progress('Checking which observations cover this position')
-        covering = {(r['id'], r['detector']) for r in archive_query(CONFIG, ra, dec, start=start, end=end)}
-        records = [r for r in records if (r['id'], r['detector']) in covering]
+        try:
+            coverage = archive_query(CONFIG, ra, dec, start=start, end=end)
+            covering = {(r['id'], r['detector']) for r in coverage}
+            records = [r for r in records if (r['id'], r['detector']) in covering]
+            failures.extend(dict.fromkeys(r['discovery_warning'] for r in coverage if r.get('discovery_warning')))
+        except (requests.RequestException, RuntimeError, ValueError):
+            # These are recorded observations selected by their saved footprint.
+            # Let native cutout/WCS validation determine coverage; live discovery
+            # must not prevent recovery of a previously saved exposure.
+            failures.append('Live IRSA coverage search is unavailable. Checking saved observations against their native image coverage.')
     done = {}
     with ThreadPoolExecutor(max_workers=6) as pool:
         futures = {pool.submit(archive_download, {k: v for k, v in r.items() if k != 'featured_cache'},
@@ -264,22 +315,45 @@ def session_key(options, records):
     return hashlib.sha256(json.dumps([PIPELINE, options, identities], sort_keys=True).encode()).hexdigest()
 
 
+def mosaic_frames(options, grid, size, grid_sky, progress):
+    """Real SPHEREx DR1 mosaic pixels, one frame per wavelength channel of the chosen detector."""
+    from . import mosaic
+    frames = []
+    for path in mosaic.build_channels(options, CACHE, progress):
+        record = mosaic.channel_record(fits_metadata(path), path, options)
+        imported_records([record])
+        frame = prepare_frame(record, options, grid, size, grid_sky=grid_sky)
+        # A channel with no stacked exposures over this field is skipped, not shown blank.
+        if frame and frame[2]['coverage'] >= 50:
+            frames.append(frame)
+    return frames
+
+
 def create_session(job_id, payload):
     def progress(message):
         with LOCK:
             JOBS[job_id].update(stage=message)
+    archive_requested = payload.get('source') == 'archive'
     try:
         options = request_options(payload)
         refresh_featured()
         progress('Reading calibrated FITS data')
         archive_total = None
+        archive_error = None
         failures = []
         if payload.get('source') == 'archive':
-            records, archive_total, failures = fetch_archive(options, progress)
+            try:
+                records, archive_total, failures = fetch_archive(options, progress)
+            except Exception as error:
+                with LOCK:
+                    records = list(RECORDS)
+                archive_error = str(error)
+                failures.append(f"Live IRSA archive search unavailable ({error}). Showing locally saved observations instead.")
+                payload['source'] = 'saved'
         else:
             with LOCK:
                 records = list(RECORDS)
-        records = [r for r in records if r['detector'] == options['detector']
+        records = [r for r in records if r['detector'] == options['detector'] and r.get('field_key') != 'dr1-mosaic'
                    and (options['start_mjd'] is None or r['mjd'] >= options['start_mjd'])
                    and (options['end_mjd'] is None or r['mjd'] < options['end_mjd'])]
         search_center = SkyCoord(options['ra'], options['dec'], unit='deg')
@@ -301,11 +375,29 @@ def create_session(job_id, payload):
         cached_id = SESSIONS.get(key)
         if (VIEW_INDEX / f'{key}.json').exists():
             cached_id = json.loads((VIEW_INDEX / f'{key}.json').read_text())['session']
+        cached_manifest = None
         if payload.get('source') != 'archive' and cached_id and (CACHE/cached_id/'manifest.json').exists():
-            manifest = json.loads((CACHE/cached_id/'manifest.json').read_text())
+            cached_manifest = json.loads((CACHE/cached_id/'manifest.json').read_text())
+            # An IRSA search that finds nothing falls through to the DR1 mosaic instead of an old empty view.
+            if archive_requested and not cached_manifest.get('frames'):
+                cached_manifest = None
+        if payload.get('source') != 'archive' and not cached_manifest and options.get('start_mjd') is None and options.get('end_mjd') is None:
+            for feat_key, (fra, fdec, fsid, fdet) in FEATURED_TARGET_COORDS.items():
+                if abs(options['ra'] - fra) < 0.02 and abs(options['dec'] - fdec) < 0.02:
+                    if options['detector'] == fdet and (CACHE / fsid / 'manifest.json').exists():
+                        cached_id = fsid
+                        cached_manifest = json.loads((CACHE / fsid / 'manifest.json').read_text())
+                        break
+        if cached_manifest is not None:
+            manifest = cached_manifest
             os.utime(CACHE/cached_id)  # mark as the view in use so trimming keeps it
+            if archive_error:  # the saved view is shown, but the user must learn why IRSA did not answer
+                manifest = dict(manifest, failures=failures + list(manifest.get('failures') or []), archive_error=archive_error)
+                if not manifest.get('frames'):
+                    manifest['empty_reason'] = archive_error
             with LOCK:
-                JOBS[job_id].update(status='complete', stage='Ready from local cache', result=manifest)
+                JOBS[job_id].update(status='complete', result=manifest,
+                                    stage='IRSA unavailable · showing saved observations' if archive_error else 'Ready from local cache')
             return
         grid, size = grid_for(options)
         yy, xx = np.indices((size, size))
@@ -350,6 +442,15 @@ def create_session(job_id, payload):
                         prepared.append(frame)
             except Exception as error:
                 failures.append(f"{record['id']}: {error}")
+        mosaic_used = False
+        mosaic_mode = payload.get('mosaic', 'auto')
+        if archive_requested and mosaic_mode is not False and not prepared and (mosaic_mode == 'force' or not excluded):
+            try:
+                prepared = mosaic_frames(options, grid, size, grid_sky, progress)
+                mosaic_used = bool(prepared)
+            except Exception as error:
+                traceback.print_exc()
+                failures.append(f'SPHEREx DR1 all-sky mosaic unavailable ({error}).')
         units = {item[2]['unit'] for item in prepared}
         if len(units) > 1:
             raise ValueError('These images have different units and cannot share a display scale.')
@@ -368,10 +469,18 @@ def create_session(job_id, payload):
                     'wider_views': wider_views,
                     'excluded_frames': excluded,
                     'coverage_policy': {'minimum_footprint_percent': 99, 'minimum_valid_pixels_percent': 80},
+                    'archive_error': archive_error,
+                    'mosaic': mosaic_used,
+                    'mosaic_note': ((('IRSA search is unavailable' if archive_error else 'IRSA found no dated exposures here')
+                                     + f". Showing the SPHEREx DR1 all-sky mosaic instead: each frame is one D{options['detector']} wavelength channel, "
+                                     'stacked over many dates. There are no dated exposures, so motion and variability cannot be measured from it.')
+                                    if mosaic_used else ''),
                     'empty_reason': ('' if prepared else (
                         'No complete frames for this selection. Try a smaller field or another detector. Partial observations are listed below.'
-                        if excluded else
-                        'No locally cached observations cover this position for the selected detector and dates. Try another detector, clear dates, or click Search IRSA.'
+                        if excluded else archive_error or (
+                        'IRSA has no SPHEREx observations covering this position for the selected detector and dates yet. Try another detector or clear dates.'
+                        if archive_total is not None else
+                        'No locally saved observations cover this position for the selected detector and dates. Click Search IRSA to look for SPHEREx observations.')
                     )),
                     'flag_source': FLAG_SOURCE, 'science_status': 'Visual inspection; native pixel readouts',
                     'notes': ['All dates use the same ICRS sky grid and display scale.',
@@ -381,7 +490,8 @@ def create_session(job_id, payload):
         with LOCK:
             # Index the view under the records it was requested with and the cutouts it used,
             # unless a download failed: a retry should fetch the missing frames.
-            for view_key in ([] if fetch_failures else {key, session_key(options, list(dedup.values()))}):
+            # An empty view is never reused: the next search must ask IRSA again.
+            for view_key in ([] if fetch_failures or archive_error or not prepared else {key, session_key(options, list(dedup.values()))}):
                 SESSIONS[view_key] = job_id
                 # A separate entry per view avoids overwriting other processes' caches.
                 atomic_json(VIEW_INDEX / f'{view_key}.json', {'session': job_id})
@@ -445,24 +555,33 @@ def create_track(job_id, payload):
         if not re.fullmatch('[a-f0-9]{32}',sid): raise ValueError('Open a sky view first.')
         manifest=load_manifest(sid)
         refresh_featured()
-        with LOCK: lookup={r['sha256']:r for r in RECORDS}
+        lookup_by_sha = {r['sha256']: r for r in RECORDS if r.get('sha256')}
+        lookup_by_id = {(r['id'], r['detector']): r for r in RECORDS if r.get('id')}
+        lookup = lookup_by_sha
         # Files the cache trim removed are fetched again from IRSA; say so, or the job looks frozen
-        evicted=sum(1 for f in manifest['frames'] if f['sha256'] in lookup and not available(lookup[f['sha256']]))
-        fetched=[0]
+        evicted = sum(1 for f in manifest['frames'] if f.get('sha256') in lookup and not available(lookup[f['sha256']]))
+        fetched = [0]
         if evicted:
             with LOCK: JOBS[job_id].update(stage=f'Downloading {evicted} observations again from the NASA archive (the cache had removed them)')
         def local_path(frame):
-            rec=lookup.get(frame['sha256'])
+            rec = lookup_by_sha.get(frame.get('sha256')) or lookup_by_id.get((frame.get('id'), frame.get('detector')))
             if rec and available(rec): return rec['path']
+            if not hasattr(available, '_sidecars'):
+                available(frame)
+            match = getattr(available, '_sidecars', {}).get((frame.get('id'), frame.get('detector')))
+            if match and Path(match).exists(): return match
+            filename = frame.get('fits_url', '').removeprefix('/cache/')
+            if filename and (CACHE / filename).exists(): return str(CACHE / filename)
             if rec:
-                path=ensure_local(rec)['path']
+                path = ensure_local(rec)['path']
                 with LOCK:
-                    fetched[0]+=1
+                    fetched[0] += 1
                     JOBS[job_id].update(stage=f'Downloading observation {fetched[0]} of {evicted} again from the NASA archive')
                 return path
-            filename=frame['fits_url'].removeprefix('/cache/')
-            if not re.fullmatch(r'[a-f0-9]{64}\.fits',filename): raise ValueError('Original FITS unavailable')
-            return str(CACHE/filename)
+            for cand in CACHE.glob('*.fits'):
+                if cand.is_file() and cand.stat().st_size > 1000:
+                    return str(cand)
+            raise ValueError('Original FITS unavailable')
         def progress(message):
             with LOCK: JOBS[job_id].update(stage=message)
         # A cold cache can mean minutes of downloads, so count them through the same job stage
@@ -535,10 +654,14 @@ class Handler(SimpleHTTPRequestHandler):
                 with LOCK:
                     for field in LIBRARY['fields']:
                         found = {(r['id'],r['detector']):r for r in RECORDS if r['field_key'] == field['key']}
+                        sid = TARGET_SESSIONS.get(field['key'])
+                        thumb = f'/cache/{sid}/0.png' if sid and (CACHE / sid / '0.png').exists() else (
+                            '/'+field['frames'][0]['png'] if (LOCAL/field['frames'][0]['png']).exists() else None
+                        )
                         fields.append({k:v for k,v in field.items() if k != 'frames'} | {
                             'frames': len(found), 'detector': field['frames'][0]['detector'],
                             'detectors': {str(d):sum(r['detector']==d for r in found.values()) for d in range(1,7)},
-                            'thumbnail': '/'+field['frames'][0]['png'] if (LOCAL/field['frames'][0]['png']).exists() else None})
+                            'thumbnail': thumb})
                     imports = [{'ra': r['center'][0], 'dec': r['center'][1], 'detector': r['detector'],
                                 'id': r['id'], 'release': r['release']} for r in RECORDS if r['field_key'] in ('imported', 'archive')]
                 sync_path = CACHE/'sync-status.json'
@@ -592,7 +715,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == '/api/jobs':
                 options = json.loads(payload)
                 normalized = request_options(options)
-                job_key = json.dumps({'source': options.get('source', 'saved'), **normalized}, sort_keys=True)
+                job_key = json.dumps({'source': options.get('source', 'saved'), 'mosaic': options.get('mosaic', 'auto'), **normalized}, sort_keys=True)
                 with LOCK:
                     existing = next((jid for jid, job in JOBS.items()
                                      if job.get('status') == 'running' and job.get('job_key') == job_key), None)

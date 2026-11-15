@@ -6,3 +6,13 @@
 #light-chart-guide p{margin:0 0 8px}
 #light-chart-guide p:last-child{margin:0}
 @media(max-width:700px){.plot-with-guide{grid-template-columns:1fr}}
+
+/* Empty patch: retry and saved-field shortcuts */
+.view-message .empty-actions { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 6px; max-width: 560px; }
+.view-message .empty-label { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.view-message .empty-fields { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+
+/* DR1 mosaic fallback notice */
+.mosaic-note { margin: 0 0 10px; padding: 9px 12px; border: 1px solid rgba(167, 139, 250, .45); border-radius: 10px;
+  background: linear-gradient(90deg, rgba(94, 231, 255, .08), rgba(167, 139, 250, .1)); color: var(--text, #eaf2ff); font-size: 12.5px; line-height: 1.5; }
+.mosaic-note[hidden] { display: none; }

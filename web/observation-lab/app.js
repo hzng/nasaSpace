@@ -8,6 +8,9 @@ const state = { library: null, session: null, index: 0, reference: 0, mode: "sin
 const hues = ["#b798f4", "#84b3ef", "#a5edcc", "#ebdf82", "#eec083", "#efac99"];
 const dateText = timestamp => new Date(timestamp).toISOString().slice(0, 10);
 const timeText = timestamp => new Date(timestamp).toISOString().slice(11, 16);
+// DR1 mosaic frames are wavelength channels stacked over many dates: label them by wavelength, never by a date.
+const frameLabel = frame => frame.mosaic ? `${Number(frame.mosaic_wavelength).toFixed(3)} µm` : dateText(frame.timestamp);
+const frameSub = frame => frame.mosaic ? `DR1 mosaic · ${frame.mosaic_hits} stacked` : `${timeText(frame.timestamp)} UTC · ${frame.release}`;
 const numberText = (value, digits=3) => value == null ? "Unavailable" : Number(value).toFixed(digits);
 
 async function api(path, options={}) {
@@ -16,7 +19,7 @@ async function api(path, options={}) {
   const data = await response.json().catch(() => {
     throw new Error("The server did not answer. It may be restarting. Try again in a moment.");
   });
-  if (!response.ok) throw new Error(data.error || "The request failed.");
+  if (!response.ok) throw new Error(data.error || data.detail || "The request failed.");
   return data;
 }
 
@@ -227,10 +230,10 @@ function renderComparison() {
   const waves = frames.map(frame => frame.wavelength).filter(value => value != null);
   const releases = [...new Set(frames.map(frame => frame.release))].join("/");
   $("comparison-note").textContent = state.mode === "split"
-    ? `${dateText(first.timestamp)} vs ${dateText(second.timestamp)}`
+    ? `${frameLabel(first)} vs ${frameLabel(second)}`
     : (waves.length ? `${Math.min(...waves).toFixed(2)}–${Math.max(...waves).toFixed(2)} µm · ${releases}` : `Outside center · ${releases}`);
-  $("frame-caption").textContent = `${dateText(first.timestamp)} · D${first.detector}`;
-  $("reference-caption").textContent = `${dateText(second.timestamp)} · D${second.detector}`;
+  $("frame-caption").textContent = `${frameLabel(first)} · D${first.detector}`;
+  $("reference-caption").textContent = `${frameLabel(second)} · D${second.detector}`;
   $("frame-caption").style.setProperty("--swatch", `var(--d${first.detector})`);
   $("reference-caption").style.setProperty("--swatch", `var(--d${second.detector})`);
 }
@@ -240,10 +243,11 @@ function setFrame(index) {
   state.index = index;
   const frame = state.session.frames[index];
   $("timeline").value = index;
-  $("timeline").setAttribute("aria-valuetext", dateText(frame.timestamp));
+  $("timeline").setAttribute("aria-valuetext", frameLabel(frame));
   if ($("frame-counter")) $("frame-counter").textContent = `Frame ${index+1} / ${state.session.frames.length}`;
-  $("observation-date").textContent = new Date(frame.timestamp).toLocaleDateString("en",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
-  $("observation-time").textContent = `${frame.timestamp.slice(11,19)} UTC`;
+  $("observation-date").textContent = frame.mosaic ? `DR1 mosaic · ${frameLabel(frame)}`
+    : new Date(frame.timestamp).toLocaleDateString("en",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
+  $("observation-time").textContent = frame.mosaic ? `Stacked over many dates · ${frame.mosaic_hits} exposures per pixel` : `${frame.timestamp.slice(11,19)} UTC`;
   entryList($("metadata"), [
     ["Obs ID",frame.id],
     ["Band",`D${frame.detector} · ${frame.release}`],
@@ -354,15 +358,15 @@ function sessionReady(session, request) {
     button.className = "frame-button";
     button.dataset.index = index;
     button.tabIndex = index===state.index ? 0 : -1;
-    button.setAttribute("aria-label",`Open observation ${dateText(frame.timestamp)}`);
+    button.setAttribute("aria-label",`Open observation ${frameLabel(frame)}`);
     const img = document.createElement("img"); img.src = frame.preview; img.alt = ""; img.loading = "lazy";
     const caption = document.createElement("span"); caption.className = "frame-copy";
-    for (const text of [dateText(frame.timestamp), `${timeText(frame.timestamp)} UTC · ${frame.release}`]) {
+    for (const text of [frameLabel(frame), frameSub(frame)]) {
       const line = document.createElement("span"); line.textContent = text; caption.append(line);
     }
     button.append(img,caption); button.onclick = () => { stop(); setFrame(index); };
     $("filmstrip").append(button);
-    const option = new Option(`${dateText(frame.timestamp)} ${timeText(frame.timestamp)} · ${frame.release}`,index);
+    const option = new Option(frame.mosaic ? `${frameLabel(frame)} · DR1 mosaic` : `${dateText(frame.timestamp)} ${timeText(frame.timestamp)} · ${frame.release}`,index);
     $("reference-date").append(option);
   });
   $("reference-date").value = state.reference;
@@ -396,9 +400,18 @@ function sessionReady(session, request) {
     $("target-note").hidden = true;
     $("target-note").textContent = "";
   }
+  let mosaicNote = $("mosaic-note");
+  if (!mosaicNote) {
+    mosaicNote = document.createElement("p");
+    mosaicNote.id = "mosaic-note"; mosaicNote.className = "mosaic-note"; mosaicNote.setAttribute("role", "note");
+    $("viewers").before(mosaicNote);
+  }
+  mosaicNote.hidden = !session.mosaic;
+  mosaicNote.textContent = session.mosaic_note || "";
   $("viewers").classList.toggle("empty-view", !session.frames.length);
   $("view-message").hidden = session.frames.length > 0;
   $("view-message").textContent = session.empty_reason || "";
+  if (!session.frames.length) emptyActions(session);
   $("archive-search").classList.toggle("primary-hint", !session.frames.length && !excluded.length);
   for (const id of ["play","previous","next","timeline","reference-date","export"]) $(id).disabled = !session.frames.length || (id === "play" && session.frames.length < 2);
   if (session.frames.length) {
@@ -420,7 +433,7 @@ function sessionReady(session, request) {
   }
   const countText = session.archive_matches == null ? `${session.frames.length} frames` : `${session.frames.length} / ${session.archive_matches} frames`;
   const capText = session.limited ? ` · evenly spaced from ${session.matched_frames}` : "";
-  status(`${countText}${capText}${session.failures.length ? ` · ${session.failures.length} errors` : ""}`);
+  status(`${countText}${session.mosaic ? " · DR1 mosaic channels" : ""}${capText}${session.failures.length ? ` · ${session.failures.length} errors` : ""}`);
   $("source-state").textContent = `Synced ${new Date(session.created_utc).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`;
   const url = new URL(location.href);
   for (const key of ["ra","dec","fov","detector","start","end"]) {
@@ -463,7 +476,8 @@ function loadingMessage(label) {
 }
 
 async function search(source="saved") {
-  const request = {options: inputs(), source, field: state.field, title: state.title, version: ++state.requestVersion};
+  const request = {options: inputs(), source, mosaic: false, field: state.field, title: state.title, version: ++state.requestVersion};
+  state.lastSource = source;
   state.pending = request;
   stop();
   ++state.drawVersion;
@@ -482,25 +496,38 @@ async function search(source="saved") {
       let result = current.source === "saved" ? state.views.get(key) : null;
       let fetched = false;
       if (!result) {
-        const job = await api("/observation-lab/api/jobs", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...current.options,source:current.source})});
-        while (true) {
-          const progress = await api(`/observation-lab/api/jobs/${job.id}`);
-          if (progress.status === "failed") throw new Error(progress.stage);
-          if (progress.status === "complete") { result = progress.result; break; }
-          if (current.version === state.requestVersion) {
-            const label = progress.stage || `Loading ${current.options.fov}′ D${current.options.detector}`;
-            status(label, "busy");
-            loadingMessage(label);
+        const where = `${current.options.fov}′ patch · D${current.options.detector}`;
+        const cover = window.SpaceLoader?.cover($("viewers"), {eyebrow: current.source === "saved" ? "SPHEREX ARCHIVE · LOADING PATCH" : "IRSA ARCHIVE · PULLING DATA",
+          title: `Loading ${where}`, detail: current.source === "saved" ? "Opening saved SPHEREx exposures for this sky patch." : "Searching IRSA for SPHEREx exposures covering this sky patch."});
+        const task = window.SpaceLoader?.begin(current.source === "saved" ? `Loading ${where}` : `Searching IRSA · ${where}`);
+        try {
+          const job = await api("/observation-lab/api/jobs", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...current.options,source:current.source,mosaic:current.mosaic ?? "auto"})});
+          while (true) {
+            const progress = await api(`/observation-lab/api/jobs/${job.id}`);
+            if (progress.status === "failed") throw new Error(progress.stage);
+            if (progress.status === "complete") { result = progress.result; break; }
+            if (current.version === state.requestVersion) {
+              const label = progress.stage || `Loading ${current.options.fov}′ D${current.options.detector}`;
+              status(label, "busy");
+              loadingMessage(label);
+              const m = /(\d+)\s+of\s+(\d+)/.exec(label);
+              task?.set(label);
+              cover?.update({detail: label, progress: m && +m[2] > 0 ? +m[1] / +m[2] : null});
+            }
+            await new Promise(resolve => setTimeout(resolve,350));
           }
-          await new Promise(resolve => setTimeout(resolve,350));
-        }
+        } finally { task?.end(); cover?.done(); }
         state.views.set(key,result);
         fetched = true;
       }
+      // Nothing found: keep looking on the user's behalf before showing an empty view.
+      const next = current.version === state.requestVersion ? nextAutoStep(current, result) : null;
+      if (next) { state.pending = next; continue; }
       if (current.version === state.requestVersion) {
         state.loading = false;
         $("viewers").setAttribute("aria-busy","false");
         sessionReady(result,current);
+        showAutoNote(current, result);
         // A view that had to be fetched comes into focus; revisited views switch instantly.
         const stage = $("viewers");
         stage.classList.remove("resolve");
@@ -522,12 +549,133 @@ async function search(source="saved") {
   state.loading = false;
 }
 
+// ---- Automatic search when a patch comes back empty ----
+// Order: Search IRSA -> smaller widths (if exposures only partly cover the field) -> other bands,
+// nearest first -> DR1 all-sky mosaic. With IRSA down, widths and bands are checked against saved
+// observations only, so each failing step is fast.
+function smallerWidths(width) {
+  const standard = [...$("fov").options].map(o => Number(o.value)).filter(v => v < width).sort((a, b) => b - a);
+  return standard.length ? standard : [3, 2].filter(v => v < width);
+}
+function setWidth(value) {
+  const select = $("fov");
+  if (![...select.options].some(o => Number(o.value) === Number(value))) {
+    const before = [...select.options].find(o => Number(o.value) > Number(value));
+    select.add(new Option(`${value} arcmin`, String(value)), before || null);
+  }
+  select.value = String(value);
+  quietChange(select);
+}
+// Update the custom select's label without starting another search.
+function quietChange(select) {
+  state.quietSelect = true;
+  try { select.dispatchEvent(new Event("change", {bubbles: true})); } finally { state.quietSelect = false; }
+}
+function setBand(detector) {
+  $("detector").value = String(detector);
+  quietChange($("detector"));
+}
+function bandOrder(origin) {
+  const order = [];
+  for (let step = 1; step < 6; step++) for (const d of [origin - step, origin + step]) if (d >= 1 && d <= 6) order.push(d);
+  return order;
+}
+function nextAutoStep(current, result) {
+  if (result.frames?.length) return null;
+  const o = current.options;
+  const auto = current.auto || {origin: {fov: Number(o.fov), detector: Number(o.detector)}, tried: new Set([`${Number(o.fov)}|${Number(o.detector)}`]),
+    archived: current.source === "archive", irsaDown: false, partial: false, finalDone: false, trail: []};
+  if (result.archive_error) auto.irsaDown = true;
+  if (result.excluded_frames?.length && Number(o.detector) === auto.origin.detector) auto.partial = true;
+  const source = auto.irsaDown ? "saved" : "archive";
+  const steps = [];
+  if (!auto.archived) steps.push({fov: auto.origin.fov, detector: auto.origin.detector, source: "archive", kind: "archive", why: "searched IRSA"});
+  if (auto.partial) for (const w of smallerWidths(auto.origin.fov)) steps.push({fov: w, detector: auto.origin.detector, source, why: `narrowed the field to ${w}′`});
+  for (const d of bandOrder(auto.origin.detector)) steps.push({fov: auto.origin.fov, detector: d, source, why: `tried band D${d}`});
+  steps.push({fov: auto.origin.fov, detector: auto.origin.detector, source: "archive", kind: "mosaic", why: "used the DR1 all-sky mosaic"});
+  const step = steps.find(s => s.kind === "archive" ? !auto.archived : s.kind === "mosaic" ? !auto.finalDone : !auto.tried.has(`${s.fov}|${s.detector}`));
+  if (!step) return null;
+  if (step.kind === "archive") auto.archived = true;
+  else if (step.kind === "mosaic") auto.finalDone = true;
+  else auto.tried.add(`${step.fov}|${step.detector}`);
+  auto.trail.push(step.why);
+  setWidth(step.fov); setBand(step.detector);
+  const request = {options: inputs(), source: step.source, mosaic: step.kind === "mosaic" ? "force" : false,
+    field: current.field, title: current.title, version: ++state.requestVersion, auto};
+  status(`Nothing at D${o.detector} · ${o.fov}′ · auto search: ${step.why}`, "busy");
+  return request;
+}
+function showAutoNote(current, result) {
+  let note = $("auto-note");
+  if (!note) {
+    note = document.createElement("p");
+    note.id = "auto-note"; note.className = "mosaic-note"; note.setAttribute("role", "note");
+    $("viewers").before(note);
+  }
+  const auto = current.auto;
+  note.hidden = !auto;
+  if (!auto) return;
+  const origin = `D${auto.origin.detector} · ${auto.origin.fov}′`;
+  note.textContent = result.frames?.length
+    ? `Nothing was found at ${origin}, so the lab automatically ${auto.trail.join(", then ")}. Now showing D${current.options.detector} · ${current.options.fov}′.`
+    : `Nothing was found at ${origin}. The lab automatically ${auto.trail.join(", then ")}, without finding complete frames.`;
+  if (!result.frames?.length) { setWidth(auto.origin.fov); setBand(auto.origin.detector); }
+}
+
+// With no frames, offer a retry and the saved fields that do hold real SPHEREx observations.
+function emptyActions(session) {
+  const box = document.createElement("div");
+  box.className = "empty-actions";
+  // Partial coverage: a narrower field often fits inside every exposure's footprint.
+  const width = Number(session.options?.fov ?? $("fov").value);
+  if (session.excluded_frames?.length && width > 2) {
+    const smaller = smallerWidths(width);
+    const label = document.createElement("p");
+    label.className = "empty-label";
+    label.textContent = "Try a smaller field width:";
+    const list = document.createElement("div");
+    list.className = "empty-fields";
+    for (const value of smaller) {
+      const button = document.createElement("button");
+      button.type = "button"; button.className = value === smaller[0] ? "btn-brass" : "btn-outline btn-compact";
+      button.textContent = `${value} arcmin`;
+      button.onclick = () => { setWidth(value); search(state.lastSource || "saved"); };
+      list.append(button);
+    }
+    box.append(label, list);
+  }
+  if (session.archive_error) {
+    const retry = document.createElement("button");
+    retry.type = "button"; retry.className = "btn-brass"; retry.textContent = "Retry Search IRSA";
+    retry.onclick = () => $("archive-search").click();
+    box.append(retry);
+  }
+  const fields = state.library?.fields || [];
+  if (fields.length) {
+    const label = document.createElement("p");
+    label.className = "empty-label";
+    label.textContent = "Saved SPHEREx fields with real observations:";
+    const list = document.createElement("div");
+    list.className = "empty-fields";
+    for (const field of fields) {
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "btn-outline btn-compact";
+      button.textContent = `${field.name} · ${field.frames} obs`;
+      button.onclick = () => chooseField(field);
+      list.append(button);
+    }
+    box.append(label, list);
+  }
+  if (box.children.length) $("view-message").append(box);
+}
+
 function chooseField(field) {
   state.title = field.name;
   state.field = field.key;
   state.objectContext = null;
   $("ra").value = field.ra;
   $("dec").value = field.dec;
+  if (field.detector) $("detector").value = field.detector;
   $("light-redshift").value = "0";
   // Preserve the chosen width and detector while switching targets.
   $("start").value = ""; $("end").value = "";
@@ -549,7 +697,7 @@ function setWorkspaceMode(mode) {
 }
 
 for (const name of ["fov","detector"]) {
-  $(name).onchange = () => search();
+  $(name).onchange = () => { if (!state.quietSelect) search(); };
   for (const [direction, step] of [["prev",-1],["next",1]]) {
     $(`${name}-${direction}`).onclick = () => {
       const select = $(name);
@@ -787,7 +935,14 @@ async function library() {
     const button = document.createElement("button"); button.className = "field"; button.dataset.key = field.key;
     button.setAttribute("aria-current",String(field.key===state.field));
     button.title = `${field.category} · ${field.frames} obs`;
-    const img = document.createElement("img"); img.src = field.thumbnail; img.alt = "";
+    const img = document.createElement("img");
+    if (field.thumbnail) {
+      img.src = field.thumbnail;
+      img.onerror = () => { img.style.display = "none"; };
+    } else {
+      img.style.display = "none";
+    }
+    img.alt = "";
     const copy = document.createElement("span"); copy.className = "field-copy";
     const meta = document.createElement("span"), title = document.createElement("strong"), description = document.createElement("small");
     title.textContent = field.name; description.textContent = `${field.frames} obs`;

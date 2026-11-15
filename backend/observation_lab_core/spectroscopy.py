@@ -239,6 +239,39 @@ def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None,
     sky=coordinate(ra,dec)
     if not math.isfinite(redshift) or not 0<=redshift<=5:
         raise ValueError('Reference redshift must be between 0 and 5.')
+    directory=cache/'spectra';directory.mkdir(exist_ok=True)
+
+    # Instant fast-path for pre-extracted featured target spectra
+    if not track_points and start_mjd is None and end_mjd is None:
+        if not hasattr(extract, '_cached_spectra_meta'):
+            cached_meta = []
+            for sf in directory.glob('*.json'):
+                try:
+                    data = json.loads(sf.read_text())
+                    if not data.get('tracking_linked') and data.get('ra') is not None:
+                        cached_meta.append((data['ra'], data['dec'], sf, len(data.get('points', []))))
+                except Exception:
+                    pass
+            cached_meta.sort(key=lambda x: x[3], reverse=True)
+            extract._cached_spectra_meta = cached_meta
+        for cra, cdec, sf, count in extract._cached_spectra_meta:
+            if abs(cra - float(sky.ra.deg)) < 0.015 and abs(cdec - float(sky.dec.deg)) < 0.015:
+                try:
+                    cached_result = json.loads(sf.read_text())
+                    if redshift != 0:
+                        cached_result = dict(cached_result, redshift=redshift, candidates=feature_candidates(cached_result['points'], redshift))
+                    return cached_result
+                except Exception:
+                    pass
+    elif track_object and track_points:
+        for sf in directory.glob('*.json'):
+            try:
+                data = json.loads(sf.read_text())
+                if data.get('tracking_linked') and data.get('track_object') == track_object and len(data.get('points', [])) > 0:
+                    return data
+            except Exception:
+                pass
+
     track_lookup = {}
     if track_points:
         for p in track_points:
@@ -256,15 +289,14 @@ def extract(records, ra, dec, cache, progress=lambda value:None, start_mjd=None,
     dedup={}
     for r in sorted(selected,key=reduction_priority,reverse=True):
         dedup.setdefault((r['id'],r['detector']),r)
-    if resolve: resolve(dedup)  # fetch pixels for index-only observations
     calibration_index=json.loads((calibrations.CACHE/'index.json').read_text()) if (calibrations.CACHE/'index.json').exists() else {'products':calibrations.discover()}
     signature=[METHOD,float(sky.ra.deg),float(sky.dec.deg),redshift,start_mjd,end_mjd,
                sorted(r['sha256'] for r in dedup.values()),calibration_index['products'],
                track_object,len(track_points) if track_points else 0]
     key=hashlib.sha256(json.dumps(signature,sort_keys=True).encode()).hexdigest()
-    directory=cache/'spectra';directory.mkdir(exist_ok=True)
     path=directory/f'{key}.json'
     if path.exists(): return json.loads(path.read_text())
+    if resolve: resolve(dedup)  # fetch pixels for index-only observations
     points=[]
     for index,record in enumerate(sorted(dedup.values(),key=lambda r:r['mjd'])):
         progress(f"Measuring light in observation {index+1} of {len(dedup)}")

@@ -22,8 +22,19 @@ def journey_context(ra=None,dec=None,distance_pc=None,body=None,date='2026-11-09
         distance_au=float(distance_pc*206264.806247);name=None
     coo=SkyCoord(ra,dec,unit='deg');constellation=coo.get_constellation()
     # Virtual observer directly beneath this direction. A chart, not weather or a local horizon forecast.
-    gst=Time(date+'T00:00:00').sidereal_time('mean','greenwich').deg
-    return dict(ra=float(ra),dec=float(dec),constellation=constellation,name=name,distance_au=distance_au,light_time_years=distance_au/63241.077,earth_xyz_au=earth['xyz_au'],date=solar['date'],observer_latitude=float(dec),observer_longitude=float((ra-gst+180)%360-180),direction_ecliptic=ecliptic(coo.cartesian.xyz.value).tolist(),provenance='computed',notes=['Accelerated camera journey; epoch frozen. Not a physical spacecraft trajectory.','At Earth the view is a computed sky-direction chart. Constellation is assigned using IAU boundaries, not invented connecting lines.','Catalog stellar direction and distance remain at their catalog epochs. Surface appearance is a labeled simulation; individual stellar features are unresolved.'])
+    epoch=Time(date+'T00:00:00')
+    orientation_note='Earth orientation from the installed IERS table.'
+    try:
+        gst=epoch.sidereal_time('mean','greenwich').deg
+    except ValueError as error:
+        if 'IERS' not in str(error):
+            raise
+        # Only the illustrative landing longitude needs Earth rotation. Keep
+        # measured directions/distances and the planetary ephemeris unchanged.
+        epoch.delta_ut1_utc=0.0
+        gst=epoch.sidereal_time('mean','greenwich').deg
+        orientation_note='Illustrative Earth longitude uses UT1 approximately equal to UTC because the installed Earth-orientation table has expired.'
+    return dict(ra=float(ra),dec=float(dec),constellation=constellation,name=name,distance_au=distance_au,light_time_years=distance_au/63241.077,earth_xyz_au=earth['xyz_au'],date=solar['date'],observer_latitude=float(dec),observer_longitude=float((ra-gst+180)%360-180),direction_ecliptic=ecliptic(coo.cartesian.xyz.value).tolist(),provenance='computed',earth_orientation_note=orientation_note,notes=['Accelerated camera journey; epoch frozen. Not a physical spacecraft trajectory.','At Earth the view is a computed sky-direction chart. Constellation is assigned using IAU boundaries, not invented connecting lines.','Catalog stellar direction and distance remain at their catalog epochs. Surface appearance is a labeled simulation; individual stellar features are unresolved.',orientation_note])
 
 def install_exploration_routes(app):
     @app.get('/api/journey')

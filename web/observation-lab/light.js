@@ -84,6 +84,17 @@ const LightLab = (() => {
     $("measure-light").disabled=true;
     if ($("track-spectrum")) $("track-spectrum").disabled = true;
     note(followTrack ? `Measuring ${trackName} along track…` : "Measuring…");
+    const task = window.SpaceLoader?.begin(followTrack ? `Pulling spectrum along ${trackName} track` : "Pulling spectrum");
+    $("light-status").classList.add("sl-inline-busy");
+    $("light-panel").classList.add("sl-spectrum-busy");
+    let wave = null;
+    if ($("light-result").hidden) {
+      wave = document.createElementNS(svgNS, "svg");
+      wave.setAttribute("class", "sl-wave"); wave.setAttribute("viewBox", "0 0 400 70"); wave.setAttribute("preserveAspectRatio", "none"); wave.setAttribute("aria-hidden", "true");
+      wave.innerHTML = '<defs><linearGradient id="sl-wave-grad" x1="0" x2="1"><stop offset="0" stop-color="#5ee7ff"/><stop offset=".5" stop-color="#a78bfa"/><stop offset="1" stop-color="#fbbf6a"/></linearGradient></defs>' +
+        '<path d="M0 45 C30 45 40 20 60 30 S100 55 120 40 150 15 175 28 210 50 235 35 270 20 290 38 330 52 350 30 385 25 400 40"/>';
+      $("light-status").after(wave);
+    } else $("light-result").classList.add("sl-scanning");
     try {
       const job=await api("/observation-lab/api/spectrum",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       while (true) {
@@ -106,11 +117,15 @@ const LightLab = (() => {
           window.dispatchEvent(new CustomEvent("chemical-point-measured",{detail:{ra:result.ra,dec:result.dec,candidates:result.candidates.filter(c=>c.candidate)}}));
           break;
         }
-        if (version===generation) note(progress.stage);
+        if (version===generation) { note(progress.stage); task?.set(progress.stage ? `Spectrum · ${progress.stage}` : null); }
         await new Promise(resolve=>setTimeout(resolve,500));
       }
     } catch(error) { if(version===generation) note(error.message); }
     finally {
+      task?.end(); wave?.remove();
+      $("light-status").classList.remove("sl-inline-busy");
+      $("light-panel").classList.remove("sl-spectrum-busy");
+      $("light-result").classList.remove("sl-scanning");
       $("measure-light").disabled=false;
       if ($("track-spectrum")) $("track-spectrum").disabled = false;
     }
