@@ -1,8 +1,43 @@
-# Parallax — Planet X / SPHEREx Observatory
+# Parallax — Planet X / SPHEREx Celestial Workbench & Observatory
 
-A science-first viewer for real SPHEREx infrared observations. Enter RA/Dec or select Barnard's Star, Epsilon Indi B, WISE 0855, RW Aurigae or R Draconis. The first screen is the science viewer; optional catalog/ephemeris 3D context is loaded separately. This is an independent project, not an official NASA service.
+[![Live App](https://img.shields.io/badge/Render-Live%20Demo-brightgreen?logo=render)](https://parallax-ompf.onrender.com)
+[![Video Demo](https://img.shields.io/badge/YouTube-Video%20Demo-red?logo=youtube)](https://youtu.be/fKCxVyTCq3k)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-See [the 14-item follow-up](docs/ISSUE_STATUS.md) and [the November 11 pipeline validation](docs/PIPELINE_VALIDATION.md) for current live browser, archive and model evidence. [Earlier acceptance evidence](docs/CURRENT_STATUS.md) covers the previous release.
+- **Live Application:** [https://parallax-ompf.onrender.com](https://parallax-ompf.onrender.com)
+- **Video Walkthrough & Demo:** [https://youtu.be/fKCxVyTCq3k](https://youtu.be/fKCxVyTCq3k)
+
+---
+
+## Project Overview
+
+**Parallax** is a science-first observatory and interactive workbench designed for exploring real infrared observations from **NASA's SPHEREx mission** (*Spectro-Photometer for the History of the Universe, Epoch of Reionization, and Ices Explorer*).
+
+The application bridges high-cadence native astronomical datasets with modern 3D celestial visualization:
+- **Real Calibrated Data:** Direct integration with Caltech/IPAC IRSA for released Level 2 spectral-image data (QR2, QR3, and DR1).
+- **Time-Series Playback & Asteroid Kinematics:** Chronological multi-frame sequence inspection (40 to 114 frames per target) with JPL Horizons ephemeris centroid tracking.
+- **Instant Point-Source Spectroscopy:** ePSF forced photometry across all 6 SPHEREx detectors ($0.75\,\mu\text{m}$ to $5.00\,\mu\text{m}$) with automated chemical screening for ice and molecular absorption/emission features ($\text{H}_2\text{O}$, $\text{PAH}\ 3.3\,\mu\text{m}$, $\text{CH}_4$, $\text{CH}_3\text{OH}$, $\text{CO}_2$, $\text{CO}$).
+- **3D Celestial Context:** Interactive 3D viewpoint from Earth/Sun to the outer Solar System, integrating Gaia DR3 3D astrometry, AllWISE infrared cross-checks, and NEOSSat optical footprints.
+
+> [!NOTE]
+> This is an independent open-source science workbench and is not an official NASA service.
+
+---
+
+## Featured Observation Targets
+
+The workbench comes with pre-compiled, verified multi-frame sequences and calibrated spectra for six primary targets:
+
+| Target | Category | SPHEREx Detector | Frames | Wavelength Span | Science Highlights |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Vesta** | Main-Belt Asteroid | D3 | **58** | $1.63\text{--}2.41\,\mu\text{m}$ | Rapid orbital motion tracked against JPL Horizons ephemerides; 349 cataloged spectral points. |
+| **Barnard’s Star** | High Proper-Motion Star | D3 | **55** | $1.63\text{--}2.41\,\mu\text{m}$ | Fast stellar proper motion ($\approx 10.4''/\text{yr}$); 361 spectral points. |
+| **Epsilon Indi B** | Cold Brown Dwarf | D3 | **72** | $1.63\text{--}2.41\,\mu\text{m}$ | Bright infrared brown dwarf binary; 447 spectral points. |
+| **WISE 0855** | Sub-Zero Brown Dwarf | D6 | **42** | $4.42\text{--}5.00\,\mu\text{m}$ | Demanding cold brown dwarf target; 256 spectral points. |
+| **RW Aurigae** | Young Variable Star | D3 | **51** | $1.63\text{--}2.41\,\mu\text{m}$ | Circumstellar dusty disk with $3.3\,\mu\text{m}$ PAH emission candidate; 333 spectral points. |
+| **R Draconis** | Mira Variable Star | D3 | **114** | $1.63\text{--}2.41\,\mu\text{m}$ | Pulsating variable star observed across hundreds of orbits near the ecliptic pole; 2,483 spectral points. |
+
+---
 
 ## SPHEREx view
 
