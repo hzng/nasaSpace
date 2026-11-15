@@ -93,9 +93,11 @@ def grid_for(options):
 def fits_metadata(path):
     with fits.open(path, memmap=False) as hdus:
         hdus.verify('exception')
-        for name in ('IMAGE', 'FLAGS', 'VARIANCE', 'WCS-WAVE'):
+        for name in ('IMAGE', 'FLAGS', 'VARIANCE'):
             if name not in hdus:
                 raise ValueError(f'The FITS file is missing its {name} extension.')
+        if 'WCS-WAVE' not in hdus and 'WAVELENGTH' not in hdus:
+            raise ValueError('The FITS file is missing its WCS-WAVE extension.')
         header = hdus['IMAGE'].header
         shape = hdus['IMAGE'].data.shape
         if len(shape) != 2 or max(shape) > 2040:
@@ -128,9 +130,20 @@ def wavelength(hdus, x, y):
         spectral = WCS(hdus['IMAGE'].header, fobj=hdus, key='W')
         spectral.sip = None
         wave, width = spectral.pixel_to_world_values(x, y)
-        return finite(wave), finite(width)
+        w, bw = finite(wave), finite(width)
+        if w is not None:
+            return w, bw
     except (ValueError, KeyError, IndexError, TypeError):
-        return None, None
+        pass
+    if 'WAVELENGTH' in hdus:
+        try:
+            wdata = hdus['WAVELENGTH'].data
+            ix, iy = int(round(float(x))), int(round(float(y)))
+            if 0 <= iy < wdata.shape[0] and 0 <= ix < wdata.shape[1]:
+                return finite(wdata[iy, ix]), None
+        except Exception:
+            pass
+    return None, None
 
 
 def finite(value):

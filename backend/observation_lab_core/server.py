@@ -79,7 +79,10 @@ def initialize():
                 native = PLANET_CACHE / (ready['cache_id']+'.fits')
             if not native.is_file():
                 continue
-            meta = fits_metadata(native)
+            try:
+                meta = fits_metadata(native)
+            except Exception as error:
+                continue
             meta.update(path=str(native), release=frame['release'], source=frame['source'],
                         field_key=field['key'], field_name=field['name'],
                         provenance='Official IRSA archived exposure',
